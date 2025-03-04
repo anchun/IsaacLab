@@ -6,7 +6,9 @@
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
-
+from isaaclab.sensors import CameraCfg
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+import isaaclab.sim as sim_utils
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg, RewardsCfg
 
@@ -121,17 +123,43 @@ class H1RoughEnvCfg_PLAY(H1RoughEnvCfg):
         # post init of parent
         super().__post_init__()
 
+        # create camera during playing
+        self.scene.camera = CameraCfg(
+            prim_path="{ENV_REGEX_NS}/Robot/torso_link/front_cam",
+            update_period=0.1,
+            height=960,
+            width=1280,
+            data_types=["rgb", "distance_to_image_plane"],
+            spawn=sim_utils.PinholeCameraCfg(
+                focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
+            ),
+            offset=CameraCfg.OffsetCfg(pos=(0.0, 0.0, 0.0), rot=(0.5, -0.5, 0.5, -0.5), convention="ros"),
+        )
         # make a smaller scene for play
         self.scene.num_envs = 50
         self.scene.env_spacing = 2.5
-        self.episode_length_s = 40.0
+        self.episode_length_s = 60.0
+        self.scene.terrain.terrain_type = "usd"
+        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Simple_Room/simple_room.usd"
+        self.curriculum.terrain_levels = None
         # spawn the robot randomly in the grid (instead of their terrain levels)
-        self.scene.terrain.max_init_terrain_level = None
+        #self.scene.terrain.max_init_terrain_level = None
         # reduce the number of terrains to save memory
-        if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 5
-            self.scene.terrain.terrain_generator.num_cols = 5
-            self.scene.terrain.terrain_generator.curriculum = False
+        # if self.scene.terrain.terrain_generator is not None:
+        #     self.scene.terrain.terrain_generator.num_rows = 5
+        #     self.scene.terrain.terrain_generator.num_cols = 5
+        #     self.scene.terrain.terrain_generator.curriculum = False
+        self.events.reset_base.params = {
+            "pose_range": {"x": (-3.5, -3.5), "y": (0.0, 0.0), "yaw": (0, 0)},
+            "velocity_range": {
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
+            },
+        }
 
         self.commands.base_velocity.ranges.lin_vel_x = (1.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
