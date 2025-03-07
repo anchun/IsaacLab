@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import math
+import numpy as np
 from dataclasses import MISSING
 
 from isaaclab.managers import CommandTermCfg
@@ -14,7 +15,7 @@ from isaaclab.utils import configclass
 from .null_command import NullCommand
 from .pose_2d_command import TerrainBasedPose2dCommand, UniformPose2dCommand
 from .pose_command import UniformPoseCommand
-from .velocity_command import NormalVelocityCommand, UniformVelocityCommand
+from .velocity_command import NormalVelocityCommand, UniformVelocityCommand, UniformVelocityNavigationCommand
 
 
 @configclass
@@ -127,6 +128,16 @@ class NormalVelocityCommandCfg(UniformVelocityCommandCfg):
 
     ranges: Ranges = MISSING
     """Distribution ranges for the velocity commands."""
+
+@configclass
+class UniformVelocityNavigationCommandCfg(UniformVelocityCommandCfg):
+    """Configuration for the normal velocity command generator."""
+
+    class_type: type = UniformVelocityNavigationCommand
+    heading_command: bool = True
+
+    waypoints: np.ndarray = MISSING
+    """The waypoints for the navigation task."""
 
 
 @configclass

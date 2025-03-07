@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import omni.log
+import math
 
 import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
@@ -21,7 +22,7 @@ from isaaclab.markers import VisualizationMarkers
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
-    from .commands_cfg import NormalVelocityCommandCfg, UniformVelocityCommandCfg
+    from .commands_cfg import NormalVelocityCommandCfg, UniformVelocityCommandCfg, UniformVelocityNavigationCommandCfg
 
 
 class UniformVelocityCommand(CommandTerm):
@@ -285,3 +286,36 @@ class NormalVelocityCommand(UniformVelocityCommand):
         self.vel_command_b[zero_vel_x_env_ids, 0] = 0.0
         self.vel_command_b[zero_vel_y_env_ids, 1] = 0.0
         self.vel_command_b[zero_vel_yaw_env_ids, 2] = 0.0
+
+class UniformVelocityNavigationCommand(UniformVelocityCommand):
+    """Command generator that generates a velocity command in SE(2) for navigation tasks.
+
+    The command comprises of a linear velocity in x and y direction and an angular velocity around
+    the z-axis. It is given in the robot's base frame.
+    """
+
+    cfg: UniformVelocityNavigationCommandCfg
+    """The command generator configuration."""
+
+    def __init__(self, cfg: UniformVelocityNavigationCommandCfg, env: ManagerBasedEnv):
+        """Initializes the command generator.
+
+        Args:
+            cfg: The command generator configuration.
+            env: The environment.
+        """
+        super().__init__(cfg, env)
+        self.waypointIndex = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
+
+    def _resample_command(self, env_ids):
+        super()._resample_command(env_ids)
+        r = torch.empty(len(env_ids), device=self.device)
+        if self.command_counter[env_ids] <= 1:
+            self.waypointIndex[env_ids] = 0 # reset waypoint index to 0 for the first time
+        firstIndex = self.waypointIndex[env_ids]
+        nextIndex = (self.waypointIndex[env_ids] + 1) % len(self.cfg.waypoints)
+        heading = self.cfg.waypoints[nextIndex] - self.cfg.waypoints[firstIndex]
+        heading_angle = math.atan2(heading[1], heading[0])
+        self.heading_target[env_ids] = torch.tensor(heading_angle).to(self.device)
+        # update waypoint index
+        self.waypointIndex[env_ids] = nextIndex
