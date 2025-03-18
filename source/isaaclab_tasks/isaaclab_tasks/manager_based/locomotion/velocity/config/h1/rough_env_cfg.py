@@ -124,10 +124,10 @@ class H1VelocityWithNavigationCommandsCfg:
 
     base_velocity = mdp.UniformVelocityNavigationCommandCfg(
         asset_name="robot",
-        resampling_time_range=(4.0, 4.0),
+        resampling_time_range=(8.0, 8.0),
         heading_command=True,
         heading_control_stiffness=1.0,
-        debug_vis=True,
+        debug_vis=False,
         ranges=mdp.UniformVelocityCommandCfg.Ranges( lin_vel_x=(1.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-2.0, 2.0), heading=(0, 0)),
         waypoints=np.array([[-3.5, 0.0], [0, 3.5], [3.5, 0], [0, -3.5]]),
     )
@@ -140,22 +140,11 @@ class H1RoughEnvCfg_PLAY(H1RoughEnvCfg):
         # post init of parent
         super().__post_init__()
 
-        # create camera during playing
-        self.scene.camera = CameraCfg(
-            prim_path="{ENV_REGEX_NS}/Robot/torso_link/front_cam",
-            update_period=0.1,
-            height=960,
-            width=1280,
-            data_types=["rgb", "distance_to_image_plane"],
-            spawn=sim_utils.PinholeCameraCfg(
-                focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
-            ),
-            offset=CameraCfg.OffsetCfg(pos=(0.0, 0.0, 0.0), rot=(0.5, -0.5, 0.5, -0.5), convention="ros"),
-        )
-
         self.episode_length_s = 60.0
         self.scene.terrain.terrain_type = "usd"
         self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Simple_Room/simple_room.usd"
+        self.scene.sky_light = None
+
         self.curriculum.terrain_levels = None
 
         self.events.reset_base.params = {
@@ -171,7 +160,7 @@ class H1RoughEnvCfg_PLAY(H1RoughEnvCfg):
         }
 
         # Commands
-        self.commands.base_velocity.ranges.lin_vel_x = (1.0, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_x = (0.5, 0.5)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-2.0, 2.0)
         # disable randomization for play
