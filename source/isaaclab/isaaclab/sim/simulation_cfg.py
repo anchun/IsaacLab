@@ -162,13 +162,13 @@ class RenderCfg:
     .. _Omniverse RTX Renderer documentation: https://docs.omniverse.nvidia.com/materials-and-rendering/latest/rtx-renderer.html
     """
 
-    enable_translucency: bool = False
+    enable_translucency: bool = True
     """Enables translucency for specular transmissive surfaces such as glass at the cost of some performance. Default is False."""
 
-    enable_reflections: bool = False
+    enable_reflections: bool = True
     """Enables reflections at the cost of some performance. Default is False."""
 
-    enable_global_illumination: bool = False
+    enable_global_illumination: bool = True
     """Enables Diffused Global Illumination at the cost of some performance. Default is False."""
 
     antialiasing_mode: Literal["Off", "FXAA", "DLSS", "TAA", "DLAA"] = "DLSS"
@@ -176,7 +176,7 @@ class RenderCfg:
        - DLSS: Boosts performance by using AI to output higher resolution frames from a lower resolution input. DLSS samples multiple lower resolution images and uses motion data and feedback from prior frames to reconstruct native quality images.
        - DLAA: Provides higher image quality with an AI-based anti-aliasing technique. DLAA uses the same Super Resolution technology developed for DLSS, reconstructing a native resolution image to maximize image quality."""
 
-    enable_dlssg: bool = False
+    enable_dlssg: bool = True
     """"Enables the use of DLSS-G.
         DLSS Frame Generation boosts performance by using AI to generate more frames.
         DLSS analyzes sequential frames and motion data to create additional high quality frames.
@@ -184,26 +184,26 @@ class RenderCfg:
         Enabling this feature also enables additional thread-related activities, which can hurt performance.
         Default is False."""
 
-    enable_dl_denoiser: bool = False
+    enable_dl_denoiser: bool = True
     """Enables the use of a DL denoiser.
        The DL denoiser can help improve the quality of renders, but comes at a cost of performance.
     """
 
-    dlss_mode: Literal[0, 1, 2, 3] = 0
+    dlss_mode: Literal[0, 1, 2, 3] = 2
     """For DLSS anti-aliasing, selects the performance/quality tradeoff mode.
        Valid values are 0 (Performance), 1 (Balanced), 2 (Quality), or 3 (Auto). Default is 0."""
 
     enable_direct_lighting: bool = True
     """Enable direct light contributions from lights."""
 
-    samples_per_pixel: int = 1
+    samples_per_pixel: int = 8
     """Defines the Direct Lighting samples per pixel.
        Higher values increase the direct lighting quality at the cost of performance. Default is 1."""
 
     enable_shadows: bool = True
     """Enables shadows at the cost of performance. When disabled, lights will not cast shadows. Defaults to True."""
 
-    enable_ambient_occlusion: bool = False
+    enable_ambient_occlusion: bool = True
     """Enables ambient occlusion at the cost of some performance. Default is False."""
 
 
