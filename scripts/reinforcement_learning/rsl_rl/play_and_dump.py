@@ -18,6 +18,7 @@ import cli_args  # isort: skip
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--dump", action="store_true", default=False, help="replicator dump during training.")
 parser.add_argument("--dump_length", type=int, default=200, help="Length of the dump frames (in steps).")
+parser.add_argument("--dump_start", type=int, default=100, help="the start frame for dump.")
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
@@ -98,8 +99,9 @@ def main():
             width=1920,
             data_types=[
                 "rgb",
-                #"normals",
-                #"semantic_segmentation",
+                "normals",
+                "distance_to_image_plane",
+                "semantic_segmentation",
                 #"instance_segmentation_fast",
             ],
             colorize_semantic_segmentation=True,
@@ -152,7 +154,7 @@ def main():
     # reset environment
     obs, _ = env.get_observations()
     timestep = 0
-    start_timestep = 200
+    start_timestep = args_cli.dump_start
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
