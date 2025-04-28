@@ -53,6 +53,7 @@ import omni.log
 
 if "handtracking" in args_cli.teleop_device.lower():
     from isaacsim.xr.openxr import OpenXRSpec
+    from isaaclab.devices.openxr import XrCfg
 
 from isaaclab.devices import OpenXRDevice, Se3Gamepad, Se3Keyboard, Se3SpaceMouse
 
@@ -151,6 +152,7 @@ def main():
         """
         nonlocal should_reset_recording_instance
         should_reset_recording_instance = True
+        print("Recording instance reset.")
 
     def start_teleoperation():
         """Activate teleoperation control of the robot.
@@ -165,6 +167,7 @@ def main():
         """
         nonlocal teleoperation_active
         teleoperation_active = True
+        print("Teleoperation started.")
 
     def stop_teleoperation():
         """Deactivate teleoperation control of the robot.
@@ -179,15 +182,16 @@ def main():
         """
         nonlocal teleoperation_active
         teleoperation_active = False
+        print("Teleoperation stopped.")
 
     # create controller
     if args_cli.teleop_device.lower() == "keyboard":
         teleop_interface = Se3Keyboard(
-            pos_sensitivity=0.05 * args_cli.sensitivity, rot_sensitivity=0.05 * args_cli.sensitivity
+            pos_sensitivity=0.1 * args_cli.sensitivity, rot_sensitivity=0.1 * args_cli.sensitivity
         )
     elif args_cli.teleop_device.lower() == "spacemouse":
         teleop_interface = Se3SpaceMouse(
-            pos_sensitivity=0.05 * args_cli.sensitivity, rot_sensitivity=0.05 * args_cli.sensitivity
+            pos_sensitivity=0.1 * args_cli.sensitivity, rot_sensitivity=0.1 * args_cli.sensitivity
         )
     elif args_cli.teleop_device.lower() == "gamepad":
         teleop_interface = Se3Gamepad(
@@ -222,11 +226,18 @@ def main():
             )
         else:
             retargeter_device = Se3RelRetargeter(
-                bound_hand=OpenXRDevice.TrackingTarget.HAND_RIGHT, zero_out_xy_rotation=True
+                bound_hand=OpenXRDevice.TrackingTarget.HAND_RIGHT, 
+                zero_out_xy_rotation=True,
+                delta_pos_scale_factor = 20,
+                delta_rot_scale_factor = 20,
             )
 
         grip_retargeter = GripperRetargeter(bound_hand=OpenXRDevice.TrackingTarget.HAND_RIGHT)
 
+        env_cfg.xr = XrCfg(
+            anchor_pos=(0.0, 0.0, 0.0),
+            anchor_rot=(1.0, 0.0, 0.0, 0.0),
+        )
         # Create hand tracking device with retargeter (in a list)
         teleop_interface = OpenXRDevice(
             env_cfg.xr,
@@ -237,7 +248,7 @@ def main():
         teleop_interface.add_callback("STOP", stop_teleoperation)
 
         # Hand tracking needs explicit start gesture to activate
-        teleoperation_active = False
+        teleoperation_active = True
     else:
         raise ValueError(
             f"Invalid device interface '{args_cli.teleop_device}'. Supported: 'keyboard', 'spacemouse', 'gamepad',"
