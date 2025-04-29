@@ -235,8 +235,8 @@ def main():
         grip_retargeter = GripperRetargeter(bound_hand=OpenXRDevice.TrackingTarget.HAND_RIGHT)
 
         env_cfg.xr = XrCfg(
-            anchor_pos=(0.0, 0.0, 0.0),
-            anchor_rot=(1.0, 0.0, 0.0, 0.0),
+            anchor_pos=(1.5, 0.0, -1.0),
+            anchor_rot=(0.707, 0.0, 0.0, 0.707),
         )
         # Create hand tracking device with retargeter (in a list)
         teleop_interface = OpenXRDevice(
