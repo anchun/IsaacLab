@@ -44,6 +44,7 @@ gym.register(
     },
 )
 
+
 gym.register(
     id="Isaac-Velocity-Rough-Anymal-D-Play-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",

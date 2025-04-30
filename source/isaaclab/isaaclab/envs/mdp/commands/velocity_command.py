@@ -18,6 +18,7 @@ import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
 from isaaclab.managers import CommandTerm
 from isaaclab.markers import VisualizationMarkers
+import numpy as np
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
@@ -287,35 +288,146 @@ class NormalVelocityCommand(UniformVelocityCommand):
         self.vel_command_b[zero_vel_y_env_ids, 1] = 0.0
         self.vel_command_b[zero_vel_yaw_env_ids, 2] = 0.0
 
-class UniformVelocityNavigationCommand(UniformVelocityCommand):
-    """Command generator that generates a velocity command in SE(2) for navigation tasks.
+# class UniformVelocityNavigationCommand(UniformVelocityCommand):
+#     """Command generator that generates a velocity command in SE(2) for navigation tasks.
 
-    The command comprises of a linear velocity in x and y direction and an angular velocity around
-    the z-axis. It is given in the robot's base frame.
-    """
+#     The command comprises of a linear velocity in x and y direction and an angular velocity around
+#     the z-axis. It is given in the robot's base frame.
+#     """
+
+#     cfg: UniformVelocityNavigationCommandCfg
+#     """The command generator configuration."""
+
+#     def __init__(self, cfg: UniformVelocityNavigationCommandCfg, env: ManagerBasedEnv):
+#         """Initializes the command generator.
+
+#         Args:
+#             cfg: The command generator configuration.
+#             env: The environment.
+#         """
+#         super().__init__(cfg, env)
+#         self.waypointIndex = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
+
+#     def _resample_command(self, env_ids):
+#         super()._resample_command(env_ids)
+#         r = torch.empty(len(env_ids), device=self.device)
+#         if self.command_counter[env_ids] <= 1:
+#             self.waypointIndex[env_ids] = 0 # reset waypoint index to 0 for the first time
+#         firstIndex = self.waypointIndex[env_ids]
+#         nextIndex = (self.waypointIndex[env_ids] + 1) % len(self.cfg.waypoints)
+#         heading = self.cfg.waypoints[nextIndex] - self.cfg.waypoints[firstIndex]
+#         heading_angle = math.atan2(heading[1], heading[0])
+#         self.heading_target[env_ids] = torch.tensor(heading_angle).to(self.device)
+#         # update waypoint index
+#         self.waypointIndex[env_ids] = nextIndex
+
+class UniformVelocityNavigationCommand_ori(UniformVelocityCommand):
+    """Command generator that generates a velocity command in SE(2) for navigation tasks."""
 
     cfg: UniformVelocityNavigationCommandCfg
-    """The command generator configuration."""
 
     def __init__(self, cfg: UniformVelocityNavigationCommandCfg, env: ManagerBasedEnv):
-        """Initializes the command generator.
-
-        Args:
-            cfg: The command generator configuration.
-            env: The environment.
-        """
         super().__init__(cfg, env)
         self.waypointIndex = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
 
     def _resample_command(self, env_ids):
         super()._resample_command(env_ids)
         r = torch.empty(len(env_ids), device=self.device)
+
         if self.command_counter[env_ids] <= 1:
+            # print("===0000====")
             self.waypointIndex[env_ids] = 0 # reset waypoint index to 0 for the first time
+        
+        # 获取当前的轨迹点
         firstIndex = self.waypointIndex[env_ids]
-        nextIndex = (self.waypointIndex[env_ids] + 1) % len(self.cfg.waypoints)
-        heading = self.cfg.waypoints[nextIndex] - self.cfg.waypoints[firstIndex]
-        heading_angle = math.atan2(heading[1], heading[0])
-        self.heading_target[env_ids] = torch.tensor(heading_angle).to(self.device)
-        # update waypoint index
-        self.waypointIndex[env_ids] = nextIndex
+        current_waypoint = np.array([self.cfg.waypoints[firstIndex][0], self.cfg.waypoints[firstIndex][1]])
+        # print(current_waypoint)
+        # 计算到目标点的距离
+        base_pos_w = self.robot.data.root_pos_w.clone()
+        base_pos_w_np = base_pos_w[env_ids, :2].cpu().numpy()  # 转换为 NumPy 数组
+        base_pos_w_pr = base_pos_w[env_ids, :3].cpu().numpy()  # 转换为 NumPy 数组
+        # 计算距离
+        # print("====after====", current_waypoint)
+        distance_to_target = np.linalg.norm(base_pos_w_np - current_waypoint)
+        # print("====after_2====", current_waypoint)
+        # distance_to_target = torch.norm(base_pos_w[env_ids, :2].cpu().numpy() - current_waypoint, dim=1)
+        # 检查是否到达目标点
+        reached_target = distance_to_target < 0.2  # 设定阈值，例如 40 cm
+
+        print("====position=====", base_pos_w_pr, current_waypoint, distance_to_target, reached_target)
+
+        # 只有在到达目标点时才更新目标点索引
+        if reached_target:
+            nextIndex = (self.waypointIndex[env_ids] + 1) % len(self.cfg.waypoints)
+            heading = (self.cfg.waypoints[nextIndex] - base_pos_w_np)[0]
+            # print(heading)
+            heading_angle = math.atan2(heading[1], heading[0])
+            # update waypoint index
+            self.waypointIndex[env_ids] = nextIndex
+            self.heading_target[env_ids] = torch.tensor(heading_angle).to(self.device)
+        else:
+            # lastIndex = (self.waypointIndex[env_ids] - 1) % len(self.cfg.waypoints)
+            heading = (self.cfg.waypoints[firstIndex] - base_pos_w_np)[0]
+            heading_angle = math.atan2(heading[1], heading[0])
+            # update waypoint index
+            self.heading_target[env_ids] = torch.tensor(heading_angle).to(self.device)
+
+        print("=====tar=====", self.heading_target[env_ids])
+
+class UniformVelocityNavigationCommand(UniformVelocityCommand):
+    """Command generator that generates a velocity command in SE(2) for navigation tasks."""
+
+    cfg: UniformVelocityNavigationCommandCfg
+
+    def __init__(self, cfg: UniformVelocityNavigationCommandCfg, env: ManagerBasedEnv):
+        super().__init__(cfg, env)
+        self.waypointIndex = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
+
+    def _resample_command(self, env_ids):
+        super()._resample_command(env_ids)
+        r = torch.empty(len(env_ids), device=self.device)
+
+        # 重置初始索引
+        reset_indices = (self.command_counter[env_ids] <= 1)
+        if reset_indices.any():
+            self.waypointIndex[env_ids[reset_indices]] = 0
+
+        # 获取当前位置信息
+        base_pos_w = self.robot.data.root_pos_w.clone()
+        base_pos_w_np = base_pos_w[env_ids, :2].cpu().numpy()  # (N, 2)
+        base_pos_w_pr = base_pos_w[env_ids, :3].cpu().numpy()  # (N, 3)
+
+        # 获取每个环境的当前轨迹点
+        current_waypoints = np.array([
+            [self.cfg.waypoints[idx.item()][0], self.cfg.waypoints[idx.item()][1]]
+            for idx in self.waypointIndex[env_ids]
+        ])  # (N, 2)
+
+        # 计算到目标点的距离 (向量化操作)
+        distances = np.linalg.norm(base_pos_w_np - current_waypoints, axis=1)  # (N,)
+        reached_targets = distances < 0.2  # (N,)
+
+        # 打印调试信息
+        for i, env_id in enumerate(env_ids):
+            print(f"Dog {env_id}: pos={base_pos_w_pr[i]}, target={current_waypoints[i]}, "
+                  f"distance={distances[i]}, reached={reached_targets[i]}")
+
+        # 更新到达目标点的机器狗的目标点索引
+        for i, (env_id, reached) in enumerate(zip(env_ids, reached_targets)):
+            if reached:
+                # 更新waypoint索引
+                next_idx = (self.waypointIndex[env_id] + 1) % len(self.cfg.waypoints)
+                self.waypointIndex[env_id] = next_idx
+                # 计算新的目标方向
+                heading = self.cfg.waypoints[next_idx] - base_pos_w_np[i]
+                heading_angle = math.atan2(heading[1], heading[0])
+                self.heading_target[env_id] = torch.tensor(heading_angle).to(self.device)
+            else:
+                # 继续朝向当前目标点
+                current_idx = self.waypointIndex[env_id]
+                heading = self.cfg.waypoints[current_idx] - base_pos_w_np[i]
+                heading_angle = math.atan2(heading[1], heading[0])
+                self.heading_target[env_id] = torch.tensor(heading_angle).to(self.device)
+
+        # 打印目标方向
+        print("Target headings:", self.heading_target[env_ids])
