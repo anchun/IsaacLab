@@ -8,7 +8,8 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
-
+import carb
+import omni
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
@@ -183,7 +184,19 @@ def main():
         nonlocal teleoperation_active
         teleoperation_active = False
         print("Teleoperation stopped.")
-
+    
+    def on_keyboard_event(event, *args):
+        if event.type == carb.input.KeyboardEventType.KEY_PRESS:
+            if event.input.name == "R":
+                reset_recording_instance()
+            elif event.input.name == "G":
+                nonlocal teleoperation_active
+                if teleoperation_active:
+                    stop_teleoperation()
+                else:
+                    start_teleoperation()
+        return True
+    
     # create controller
     if args_cli.teleop_device.lower() == "keyboard":
         teleop_interface = Se3Keyboard(
@@ -233,6 +246,7 @@ def main():
             )
 
         grip_retargeter = GripperRetargeter(bound_hand=OpenXRDevice.TrackingTarget.HAND_RIGHT)
+        control_grip_retargeter = GripperRetargeter(bound_hand=OpenXRDevice.TrackingTarget.HAND_LEFT)
 
         env_cfg.xr = XrCfg(
             anchor_pos=(1.5, 0.0, -1.0),
@@ -241,14 +255,22 @@ def main():
         # Create hand tracking device with retargeter (in a list)
         teleop_interface = OpenXRDevice(
             env_cfg.xr,
-            retargeters=[retargeter_device, grip_retargeter],
+            retargeters=[retargeter_device, grip_retargeter, control_grip_retargeter],
         )
+        
         teleop_interface.add_callback("RESET", reset_recording_instance)
         teleop_interface.add_callback("START", start_teleoperation)
         teleop_interface.add_callback("STOP", stop_teleoperation)
 
-        # Hand tracking needs explicit start gesture to activate
-        teleoperation_active = True
+        # use keyboard to control start/stop teleoperation
+        control_keyboard = omni.appwindow.get_default_app_window().get_keyboard()
+        control_input = carb.input.acquire_input_interface()
+        control_keyboard_sub = control_input.subscribe_to_keyboard_events(control_keyboard, on_keyboard_event)
+
+        # Hand tracking needs explicit start to activate
+        teleoperation_active = False
+        
+        
     else:
         raise ValueError(
             f"Invalid device interface '{args_cli.teleop_device}'. Supported: 'keyboard', 'spacemouse', 'gamepad',"
@@ -273,7 +295,11 @@ def main():
             # Only apply teleop commands when active
             if teleoperation_active:
                 # compute actions based on environment
-                actions = pre_process_actions(teleop_data, env.num_envs, env.device)
+                actions = pre_process_actions((teleop_data[0], teleop_data[1]), env.num_envs, env.device)
+                if "handtracking" in args_cli.teleop_device.lower():
+                    left_hand_reset_cmd = teleop_data[2]
+                    if left_hand_reset_cmd:
+                        reset_recording_instance()
                 # apply actions
                 env.step(actions)
             else:

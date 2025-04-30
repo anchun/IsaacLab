@@ -70,6 +70,8 @@ class GripperRetargeter(RetargeterBase):
         Returns:
             bool: Gripper command (True = close, False = open)
         """
+        if(np.linalg.norm(thumb_pos) < 0.001 and np.linalg.norm(index_pos) < 0.001):
+            return self._previous_gripper_command
         distance = np.linalg.norm(thumb_pos - index_pos)
 
         # Apply hysteresis to prevent rapid switching

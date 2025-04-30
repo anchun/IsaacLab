@@ -48,6 +48,6 @@ class FrankaCubeLiftEnvCfg_PLAY(FrankaCubeLiftEnvCfg):
         self.observations.policy.enable_corruption = False
         self.commands.object_pose.debug_vis = False
         self.scene.plane.spawn.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Simple_Warehouse/warehouse.usd"
-        self.scene.object.spawn.usd_path = f"{ISAAC_NUCLEUS_DIR}/Props/YCB/Axis_Aligned/011_banana.usd"
-        self.scene.object.spawn.scale = (1.2, 1.2, 1.2)
+        self.scene.object.spawn.usd_path = f"{ISAAC_NUCLEUS_DIR}/Props/YCB/Axis_Aligned/036_wood_block.usd"
+        self.scene.object.spawn.scale = (1.0, 1.0, 1.0)
 
