@@ -14,14 +14,13 @@ the event introduced by the function.
 
 from __future__ import annotations
 
-import math
 import torch
+import random
 from typing import TYPE_CHECKING, Literal
 
 import carb
 import omni.physics.tensors.impl.api as physx
 import omni.usd
-from isaacsim.core.utils.extensions import enable_extension
 from pxr import Gf, Sdf, UsdGeom, Vt
 
 import isaaclab.sim as sim_utils
@@ -864,6 +863,118 @@ def reset_root_state_uniform(
     asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1), env_ids=env_ids)
     asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
 
+def is_point_in_polygon(point: torch.Tensor, polygon: torch.Tensor) -> bool:
+    """使用射线法检查点是否在多边形内。"""
+    x, y = point[0].item(), point[1].item()
+    n = polygon.size(0)
+    inside = False
+
+    p1x, p1y = polygon[0][0].item(), polygon[0][1].item()
+    for i in range(n + 1):
+        p2x, p2y = polygon[i % n][0].item(), polygon[i % n][1].item()
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+
+    return inside
+
+def check_valid_position(positions: torch.Tensor, polygon: torch.Tensor) -> bool:
+    """检查生成的位置是否有效，确保在多边形区域内。"""
+    if is_point_in_polygon(positions[:2], polygon):  # 只检查 x 和 y 坐标
+        return True  # 如果点在多边形内，则有效
+    return False  # 所有点都在有效区域
+
+good_position = []
+
+def reset_root_state_uniform_with_limit(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    pose_range, #: dict[str, tuple[float, float]],
+    velocity_range: dict[str, tuple[float, float]],
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset the asset root state to a random position and velocity uniformly within the given ranges."""
+    asset: RigidObject | Articulation = env.scene[asset_cfg.name]
+    root_states = asset.data.default_root_state[env_ids].clone()
+
+    # poses
+    num_poses = len(pose_range)
+    all_range_list = [[pose_range[i].get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]] for i in range(len(pose_range))]
+    all_ranges = []
+    for range_list in all_range_list:
+    # range_list = [pose_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
+        ranges = torch.tensor(range_list, device=asset.device)
+        all_ranges.append(ranges)
+
+    polygon = torch.tensor([[-29, 21], [-25, 21], [-25, 5], [-31, 5], [-31, 11], [-39.5, 11], [-39.5, 5], [-41.5, 5], [-41.5, 7.5], [-47, 7.5], [-47, 10], [-41.5, 10], [-41.5, 18], [-39.5, 18], [-39.5, 13.5], [-31, 13.5], [-31, 15], [-29, 15]], dtype=torch.float32)
+    # polygon = torch.tensor([[-29, 21], [-25, 21], [-25, 5], [-31, 5], [-31, 15], [-29, 15]], dtype=torch.float32)
+
+    # 生成随机位置并检查有效性
+    num_dogs = root_states.shape[0]
+    valid_position = [False for i in range(num_dogs)]
+    patch_size = num_dogs // num_poses
+    last_patch = num_dogs - patch_size * (num_poses - 1)
+    rand_samples = []
+    for i in range(num_poses - 1):
+        # start = patch_size*(i)
+        # end_index = patch_size*(i+1)
+        # print("patch_size:", patch_size)
+        # print("all_ranges:", all_ranges)
+        # print("i:", i)
+        # print("start:", start)
+        # print("end_index:", end_index)
+        # print("upper:", all_ranges[i][start:end_index, 1])
+        # print("lower:", all_ranges[i][start:end_index, 0])
+        rand_samples.append((math_utils.sample_uniform(all_ranges[i][:, 0], all_ranges[i][:, 1], (patch_size, 6), device=asset.device)))
+    rand_samples.append(math_utils.sample_uniform(all_ranges[num_poses - 1][:, 0], all_ranges[num_poses - 1][:, 1], (last_patch, 6), device=asset.device))
+    rand_samples = torch.cat(rand_samples, dim=0)
+    print("=======Rand_samples======", rand_samples.shape)
+    positions = root_states[:, 0:3] + env.scene.env_origins[env_ids] + rand_samples[:, 0:3]
+    for i in range(positions.shape[0]):
+        positions[i][2] = 0.72
+
+    global good_position
+
+    # 检查位置是否有效
+    for i in range(num_dogs):
+        valid_position_i = check_valid_position(positions[i], polygon)  # 需要实现这个函数
+        if valid_position_i:
+            valid_position[i] = True
+            good_position.append(positions[i])
+        
+    for i in range(num_dogs):
+        if not valid_position[i]:
+            valid_position_i = False
+            while not valid_position_i:
+                # rand_samples_i = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
+                # positions_i = (root_states[:, 0:3] + env.scene.env_origins[env_ids] + rand_samples_i[:, 0:3])[0]
+                positions_i = random.choice(good_position)
+                if check_valid_position(positions_i, polygon):
+                    valid_position_i = True
+                    positions[i] = positions_i
+
+    # 计算姿态
+    orientations_delta = math_utils.quat_from_euler_xyz(rand_samples[:, 3], rand_samples[:, 4], rand_samples[:, 5])
+    orientations = math_utils.quat_mul(root_states[:, 3:7], orientations_delta)
+
+    # velocities
+    range_list = [velocity_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
+    ranges = torch.tensor(range_list, device=asset.device)
+    rand_samples = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
+
+    velocities = root_states[:, 7:13] + rand_samples
+
+    # set into the physics simulation
+    asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1), env_ids=env_ids)
+    asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
+
+
+
 
 def reset_root_state_with_random_orientation(
     env: ManagerBasedEnv,
@@ -1121,202 +1232,6 @@ def reset_scene_to_default(env: ManagerBasedEnv, env_ids: torch.Tensor):
         # obtain default and set into the physics simulation
         nodal_state = deformable_object.data.default_nodal_state_w[env_ids].clone()
         deformable_object.write_nodal_state_to_sim(nodal_state, env_ids=env_ids)
-
-
-class randomize_visual_texture_material(ManagerTermBase):
-    """Randomize the visual texture of bodies on an asset using Replicator API.
-
-    This function randomizes the visual texture of the bodies of the asset using the Replicator API.
-    The function samples random textures from the given texture paths and applies them to the bodies
-    of the asset. The textures are projected onto the bodies and rotated by the given angles.
-
-    .. note::
-        The function assumes that the asset follows the prim naming convention as:
-        "{asset_prim_path}/{body_name}/visuals" where the body name is the name of the body to
-        which the texture is applied. This is the default prim ordering when importing assets
-        from the asset converters in Isaac Lab.
-
-    .. note::
-        When randomizing the texture of individual assets, please make sure to set
-        :attr:`isaaclab.scene.InteractiveSceneCfg.replicate_physics` to False. This ensures that physics
-        parser will parse the individual asset properties separately.
-    """
-
-    def __init__(self, cfg: EventTermCfg, env: ManagerBasedEnv):
-        """Initialize the term.
-
-        Args:
-            cfg: The configuration of the event term.
-            env: The environment instance.
-        """
-        super().__init__(cfg, env)
-
-        # enable replicator extension if not already enabled
-        enable_extension("omni.replicator.core")
-        # we import the module here since we may not always need the replicator
-        import omni.replicator.core as rep
-
-        # read parameters from the configuration
-        asset_cfg: SceneEntityCfg = cfg.params.get("asset_cfg")
-        texture_paths = cfg.params.get("texture_paths")
-        event_name = cfg.params.get("event_name")
-        texture_rotation = cfg.params.get("texture_rotation", (0.0, 0.0))
-
-        # check to make sure replicate_physics is set to False, else raise error
-        # note: We add an explicit check here since texture randomization can happen outside of 'prestartup' mode
-        #   and the event manager doesn't check in that case.
-        if env.cfg.scene.replicate_physics:
-            raise RuntimeError(
-                "Unable to randomize visual texture material with scene replication enabled."
-                " For stable USD-level randomization, please disable scene replication"
-                " by setting 'replicate_physics' to False in 'InteractiveSceneCfg'."
-            )
-
-        # convert from radians to degrees
-        texture_rotation = tuple(math.degrees(angle) for angle in texture_rotation)
-
-        # obtain the asset entity
-        asset = env.scene[asset_cfg.name]
-
-        # join all bodies in the asset
-        body_names = asset_cfg.body_names
-        if isinstance(body_names, str):
-            body_names_regex = body_names
-        elif isinstance(body_names, list):
-            body_names_regex = "|".join(body_names)
-        else:
-            body_names_regex = ".*"
-
-        # create the affected prim path
-        # TODO: Remove the hard-coded "/visuals" part.
-        prim_path = f"{asset.cfg.prim_path}/{body_names_regex}/visuals"
-
-        # Create the omni-graph node for the randomization term
-        def rep_texture_randomization():
-            prims_group = rep.get.prims(path_pattern=prim_path)
-
-            with prims_group:
-                rep.randomizer.texture(
-                    textures=texture_paths, project_uvw=True, texture_rotate=rep.distribution.uniform(*texture_rotation)
-                )
-
-            return prims_group.node
-
-        # Register the event to the replicator
-        with rep.trigger.on_custom_event(event_name=event_name):
-            rep_texture_randomization()
-
-    def __call__(
-        self,
-        env: ManagerBasedEnv,
-        env_ids: torch.Tensor,
-        event_name: str,
-        asset_cfg: SceneEntityCfg,
-        texture_paths: list[str],
-        texture_rotation: tuple[float, float] = (0.0, 0.0),
-    ):
-        # import replicator
-        import omni.replicator.core as rep
-
-        # only send the event to the replicator
-        # note: This triggers the nodes for all the environments.
-        #   We need to investigate how to make it happen only for a subset based on env_ids.
-        rep.utils.send_og_event(event_name)
-
-
-class randomize_visual_color(ManagerTermBase):
-    """Randomize the visual color of bodies on an asset using Replicator API.
-
-    This function randomizes the visual color of the bodies of the asset using the Replicator API.
-    The function samples random colors from the given colors and applies them to the bodies
-    of the asset.
-
-    The function assumes that the asset follows the prim naming convention as:
-    "{asset_prim_path}/{mesh_name}" where the mesh name is the name of the mesh to
-    which the color is applied. For instance, if the asset has a prim path "/World/asset"
-    and a mesh named "body_0/mesh", the prim path for the mesh would be
-    "/World/asset/body_0/mesh".
-
-    The colors can be specified as a list of tuples of the form ``(r, g, b)`` or as a dictionary
-    with the keys ``r``, ``g``, ``b`` and values as tuples of the form ``(low, high)``.
-    If a dictionary is used, the function will sample random colors from the given ranges.
-
-    .. note::
-        When randomizing the color of individual assets, please make sure to set
-        :attr:`isaaclab.scene.InteractiveSceneCfg.replicate_physics` to False. This ensures that physics
-        parser will parse the individual asset properties separately.
-    """
-
-    def __init__(self, cfg: EventTermCfg, env: ManagerBasedEnv):
-        """Initialize the randomization term."""
-        super().__init__(cfg, env)
-
-        # enable replicator extension if not already enabled
-        enable_extension("omni.replicator.core")
-        # we import the module here since we may not always need the replicator
-        import omni.replicator.core as rep
-
-        # read parameters from the configuration
-        asset_cfg: SceneEntityCfg = cfg.params.get("asset_cfg")
-        colors = cfg.params.get("colors")
-        event_name = cfg.params.get("event_name")
-        mesh_name: str = cfg.params.get("mesh_name", "")  # type: ignore
-
-        # check to make sure replicate_physics is set to False, else raise error
-        # note: We add an explicit check here since texture randomization can happen outside of 'prestartup' mode
-        #   and the event manager doesn't check in that case.
-        if env.cfg.scene.replicate_physics:
-            raise RuntimeError(
-                "Unable to randomize visual color with scene replication enabled."
-                " For stable USD-level randomization, please disable scene replication"
-                " by setting 'replicate_physics' to False in 'InteractiveSceneCfg'."
-            )
-
-        # obtain the asset entity
-        asset = env.scene[asset_cfg.name]
-
-        # create the affected prim path
-        if not mesh_name.startswith("/"):
-            mesh_name = "/" + mesh_name
-        mesh_prim_path = f"{asset.cfg.prim_path}{mesh_name}"
-        # TODO: Need to make it work for multiple meshes.
-
-        # parse the colors into replicator format
-        if isinstance(colors, dict):
-            # (r, g, b) - low, high --> (low_r, low_g, low_b) and (high_r, high_g, high_b)
-            color_low = [colors[key][0] for key in ["r", "g", "b"]]
-            color_high = [colors[key][1] for key in ["r", "g", "b"]]
-            colors = rep.distribution.uniform(color_low, color_high)
-        else:
-            colors = list(colors)
-
-        # Create the omni-graph node for the randomization term
-        def rep_texture_randomization():
-            prims_group = rep.get.prims(path_pattern=mesh_prim_path)
-
-            with prims_group:
-                rep.randomizer.color(colors=colors)
-
-            return prims_group.node
-
-        # Register the event to the replicator
-        with rep.trigger.on_custom_event(event_name=event_name):
-            rep_texture_randomization()
-
-    def __call__(
-        self,
-        env: ManagerBasedEnv,
-        env_ids: torch.Tensor,
-        event_name: str,
-        asset_cfg: SceneEntityCfg,
-        colors: list[tuple[float, float, float]] | dict[str, tuple[float, float]],
-        mesh_name: str = "",
-    ):
-        # import replicator
-        import omni.replicator.core as rep
-
-        # only send the event to the replicator
-        rep.utils.send_og_event(event_name)
 
 
 """

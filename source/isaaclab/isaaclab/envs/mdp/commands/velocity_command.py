@@ -374,7 +374,7 @@ class UniformVelocityNavigationCommand_ori(UniformVelocityCommand):
 
         print("=====tar=====", self.heading_target[env_ids])
 
-class UniformVelocityNavigationCommand(UniformVelocityCommand):
+class UniformVelocityNavigationCommand_one_trajectory(UniformVelocityCommand):
     """Command generator that generates a velocity command in SE(2) for navigation tasks."""
 
     cfg: UniformVelocityNavigationCommandCfg
@@ -428,6 +428,87 @@ class UniformVelocityNavigationCommand(UniformVelocityCommand):
                 heading = self.cfg.waypoints[current_idx] - base_pos_w_np[i]
                 heading_angle = math.atan2(heading[1], heading[0])
                 self.heading_target[env_id] = torch.tensor(heading_angle).to(self.device)
+
+        # 打印目标方向
+        print("Target headings:", self.heading_target[env_ids])
+
+current_waypoints = {}
+class UniformVelocityNavigationCommand(UniformVelocityCommand):
+    """Command generator that generates a velocity command in SE(2) for navigation tasks."""
+
+    cfg: UniformVelocityNavigationCommandCfg
+
+    def __init__(self, cfg: UniformVelocityNavigationCommandCfg, env: ManagerBasedEnv):
+        super().__init__(cfg, env)
+        self.waypointIndex = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
+
+    def _resample_command(self, env_ids):
+        super()._resample_command(env_ids)
+        r = torch.empty(len(env_ids), device=self.device)
+
+        # 重置初始索引
+        reset_indices = (self.command_counter[env_ids] <= 1)
+        if reset_indices.any():
+            self.waypointIndex[env_ids[reset_indices]] = 0
+
+        # 获取当前位置信息
+        base_pos_w = self.robot.data.root_pos_w.clone()
+        base_pos_w_np = base_pos_w[env_ids, :2].cpu().numpy()  # (N, 2)
+
+        # 随机选择轨迹
+        print(env_ids, type(env_ids))
+        num_dogs = len(env_ids)
+        selected_trajectories = np.random.choice(len(self.cfg.waypoints), num_dogs)
+        global current_waypoints
+
+        for i in range(num_dogs):
+            trajectory = self.cfg.waypoints[selected_trajectories[i]]
+            # 在轨迹点上添加微扰
+            perturbed_points = [
+                [point[0] + np.random.uniform(-0.5, 0.5), point[1] + np.random.uniform(-0.5, 0.5)]
+                for point in trajectory
+            ]
+            # 只在current_waypoints中不存在env_id时才赋值
+            if env_ids[i].item() not in current_waypoints:
+                current_waypoints[env_ids[i].item()] = perturbed_points
+
+        # 计算到目标点的距离
+        distances = []
+        for i in range(num_dogs):
+            current_idx = self.waypointIndex[env_ids[i]].item()
+            if current_idx < len(current_waypoints[env_ids[i].item()]):
+                target_point = current_waypoints[env_ids[i].item()][current_idx]
+                distance = np.linalg.norm(base_pos_w_np[i] - target_point)  # 计算距离
+                distances.append(distance)
+            else:
+                distances.append(float('inf'))  # 如果索引超出范围，设置为无穷大
+
+        distances = np.array(distances)  # (N,)
+        reached_targets = distances < 0.2  # (N,)
+
+        # 打印调试信息
+        for i, env_id in enumerate(env_ids):
+            print(f"Dog {env_id}: pos={base_pos_w_np[i]}, target={current_waypoints[env_ids[i].item()]}, "
+                f"distance={distances[i]}, reached={reached_targets[i]}")
+
+        # 更新到达目标点的机器狗的目标点索引
+        for i, (env_id, reached) in enumerate(zip(env_ids, reached_targets)):
+            if reached:
+                # 更新waypoint索引
+                next_idx = (self.waypointIndex[env_id] + 1) % len(current_waypoints[env_ids[i].item()])  # 确保索引在范围内
+                self.waypointIndex[env_id] = next_idx
+                # 计算新的目标方向
+                if next_idx < len(current_waypoints[env_ids[i].item()]):
+                    heading = current_waypoints[env_ids[i].item()][next_idx] - base_pos_w_np[i]
+                    heading_angle = math.atan2(heading[1], heading[0])
+                    self.heading_target[env_id] = torch.tensor(heading_angle).to(self.device)
+            else:
+                # 继续朝向当前目标点
+                current_idx = self.waypointIndex[env_id]
+                if current_idx < len(current_waypoints[env_ids[i].item()]):
+                    heading = current_waypoints[env_ids[i].item()][current_idx] - base_pos_w_np[i]
+                    heading_angle = math.atan2(heading[1], heading[0])
+                    self.heading_target[env_id] = torch.tensor(heading_angle).to(self.device)
 
         # 打印目标方向
         print("Target headings:", self.heading_target[env_ids])

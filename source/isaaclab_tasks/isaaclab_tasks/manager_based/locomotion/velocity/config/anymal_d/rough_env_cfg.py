@@ -17,6 +17,7 @@ import os
 # Pre-defined configs
 ##
 from isaaclab_assets.robots.anymal import ANYMAL_D_CFG  # isort: skip
+from isaaclab_assets.robots.unitree import UNITREE_GO1_CFG  # isort: skip
 
 # 从 .npy 文件加载轨迹点
 current_file_directory = os.path.dirname(os.path.abspath(__file__))
@@ -31,11 +32,39 @@ trajectory_points = np.load(os.path.join(current_file_directory, "trajectory_poi
 #     [-31.0, 13.5],
 #     [-31.0, 22.3]
 # ])
-trajectory_points = [
+# trajectory_points = [
+#     [-28.0, 10.0],
+#     [-30.5, 13.5],
+#     [-31.5, 22.3]
+# ]    # 训练时用这个
+all_trajectory_points = [
+    [
     [-28.0, 10.0],
     [-30.5, 13.5],
     [-31.5, 22.3]
-]    # 训练时用这个
+    ],
+    [
+    [-21.0, 10.0],
+    [-10.0, 10.0],
+    [3.0, 10.0],
+    [7.0, 10.0],
+    [7.0, 5.0],
+    [7.0, 10.0]
+    ],
+    [
+    [-21.0, 10.0],
+    [-10.0, 10.0],
+    [3.0, 10.0],
+    [7.0, 10.0],
+    [18.0, 1.0],
+    [16.0, 3.0],
+    [16.0, 10.0]
+    ],
+    [
+    [-41.0, 13.0],
+    [-40.0, 30.0],
+    [-41.0, 13.0]
+    ]]    # 训练时用这个
 
 @configclass
 class AnymalDRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
@@ -56,7 +85,7 @@ class AnymalDRoughWithNavigationCommandsCfg:
         heading_control_stiffness=1.0,
         debug_vis=False,
         ranges=mdp.UniformVelocityCommandCfg.Ranges( lin_vel_x=(1.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-2.0, 2.0), heading=(0, 0)),
-        waypoints=trajectory_points,
+        waypoints=all_trajectory_points,
     )
 
 
@@ -79,7 +108,12 @@ class AnymalDRoughEnvCfg_PLAY(AnymalDRoughEnvCfg):
 
         self.events.reset_base.params = {
             # "pose_range": {"x": (-3.5, -3.5), "y": (0.0, 0.0), "z": (0.04, 0.04), "yaw": (0, 0)},  # room
-            "pose_range": {"x": (-28.0, -28.0), "y": (10.0, 10.0), "z": (0.72, 0.72), "yaw": (0, 0)},   # hospital
+            "pose_range": [{"x": (-28.0, -28.0), "y": (10.0, 10.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+                           {"x": (-34.0, -34.0), "y": (12.0, 12.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+                           {"x": (-36.0, -36.0), "y": (12.0, 12.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+                           {"x": (-40.5, -40.5), "y": (5.0, 5.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+                           {"x": (-44.0, -44.0), "y": (8.5, 8.5), "z": (0.72, 0.72), "yaw": (0, 0)},
+                           {"x": (-40.5, -40.5), "y": (18.0, 18.0), "z": (0.72, 0.72), "yaw": (0, 0)}],   # hospital
             # "pose_range": {"x": (3195, 3195), "y": (-1548, -1548), "z": (120, 120), "yaw": (0, 0)},   # workshop1
             "velocity_range": {
                 "x": (0.0, 0.0),

@@ -4,7 +4,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from isaaclab.utils import configclass
-
+import numpy as np
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg
 
 ##
@@ -12,6 +14,35 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import Lo
 ##
 from isaaclab_assets.robots.unitree import UNITREE_GO2_CFG  # isort: skip
 
+
+all_trajectory_points = [
+    [
+    [-28.0, 10.0],
+    [-30.5, 13.5],
+    [-31.5, 22.3]
+    ],
+    [
+    [-21.0, 10.0],
+    [-10.0, 10.0],
+    [3.0, 10.0],
+    [7.0, 10.0],
+    [7.0, 5.0],
+    [7.0, 10.0]
+    ],
+    [
+    [-21.0, 10.0],
+    [-10.0, 10.0],
+    [3.0, 10.0],
+    [7.0, 10.0],
+    [18.0, 1.0],
+    [16.0, 3.0],
+    [16.0, 10.0]
+    ],
+    [
+    [-41.0, 13.0],
+    [-40.0, 30.0],
+    [-41.0, 13.0]
+    ]]    # 训练时用这个
 
 @configclass
 class UnitreeGo2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
@@ -36,7 +67,12 @@ class UnitreeGo2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.events.base_external_force_torque.params["asset_cfg"].body_names = "base"
         self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
         self.events.reset_base.params = {
-            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
+            "pose_range": [{"x": (-28.0, -28.0), "y": (10.0, 10.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+                           {"x": (-34.0, -34.0), "y": (12.0, 12.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+                           {"x": (-36.0, -36.0), "y": (12.0, 12.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+                           {"x": (-40.5, -40.5), "y": (5.0, 5.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+                           {"x": (-44.0, -44.0), "y": (8.5, 8.5), "z": (0.72, 0.72), "yaw": (0, 0)},
+                           {"x": (-40.5, -40.5), "y": (18.0, 18.0), "z": (0.72, 0.72), "yaw": (0, 0)}],   # hospital
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
@@ -59,23 +95,48 @@ class UnitreeGo2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         # terminations
         self.terminations.base_contact.params["sensor_cfg"].body_names = "base"
 
+@configclass
+class AnymalDRoughWithNavigationCommandsCfg:
+    """Command specifications for the MDP."""
+
+    base_velocity = mdp.UniformVelocityNavigationCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(0.1, 0.1),
+        heading_command=True,
+        heading_control_stiffness=1.0,
+        debug_vis=False,
+        ranges=mdp.UniformVelocityCommandCfg.Ranges( lin_vel_x=(1.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-2.0, 2.0), heading=(0, 0)),
+        waypoints=all_trajectory_points,
+    )
 
 @configclass
 class UnitreeGo2RoughEnvCfg_PLAY(UnitreeGo2RoughEnvCfg):
+    commands: AnymalDRoughWithNavigationCommandsCfg = AnymalDRoughWithNavigationCommandsCfg()
+    
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
 
-        # make a smaller scene for play
-        self.scene.num_envs = 50
-        self.scene.env_spacing = 2.5
-        # spawn the robot randomly in the grid (instead of their terrain levels)
-        self.scene.terrain.max_init_terrain_level = None
-        # reduce the number of terrains to save memory
-        if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 5
-            self.scene.terrain.terrain_generator.num_cols = 5
-            self.scene.terrain.terrain_generator.curriculum = False
+        self.episode_length_s = 60.0
+        self.scene.terrain.terrain_type = "usd"
+        # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Simple_Room/simple_room_dog.usd"
+        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Hospital/hospital_dog_very_low.usd"
+        # self.scene.terrain.usd_path = r"D:\fsy\scene\Data_01_RobotArm\L_Workshop_01_latest.usd"
+        self.scene.sky_light = None
+
+        self.curriculum.terrain_levels = None
+
+
+        # # make a smaller scene for play
+        # self.scene.num_envs = 50
+        # self.scene.env_spacing = 2.5
+        # # spawn the robot randomly in the grid (instead of their terrain levels)
+        # self.scene.terrain.max_init_terrain_level = None
+        # # reduce the number of terrains to save memory
+        # if self.scene.terrain.terrain_generator is not None:
+        #     self.scene.terrain.terrain_generator.num_rows = 5
+        #     self.scene.terrain.terrain_generator.num_cols = 5
+        #     self.scene.terrain.terrain_generator.curriculum = False
 
         # disable randomization for play
         self.observations.policy.enable_corruption = False

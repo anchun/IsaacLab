@@ -41,6 +41,7 @@ def feet_air_time(
     reward = torch.sum((last_air_time - threshold) * first_contact, dim=1)
     # no reward for zero command
     reward *= torch.norm(env.command_manager.get_command(command_name)[:, :2], dim=1) > 0.1
+    print("===========reward.feet_air_time=============", reward)
     return reward
 
 
@@ -63,6 +64,7 @@ def feet_air_time_positive_biped(env, command_name: str, threshold: float, senso
     reward = torch.clamp(reward, max=threshold)
     # no reward for zero command
     reward *= torch.norm(env.command_manager.get_command(command_name)[:, :2], dim=1) > 0.1
+    print("===========reward.feet_air_time_positive_biped=============", reward)
     return reward
 
 
@@ -80,6 +82,7 @@ def feet_slide(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = Scen
 
     body_vel = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2]
     reward = torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
+    print("===========reward.feet_slide=============", reward)
     return reward
 
 
@@ -104,3 +107,63 @@ def track_ang_vel_z_world_exp(
     asset = env.scene[asset_cfg.name]
     ang_vel_error = torch.square(env.command_manager.get_command(command_name)[:, 2] - asset.data.root_ang_vel_w[:, 2])
     return torch.exp(-ang_vel_error / std**2)
+
+def height_reward(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), height_threshold: float = 1.0) -> torch.Tensor:
+    """Reward for achieving a height above a certain threshold."""
+    asset = env.scene[asset_cfg.name]
+    # 获取机器狗的 z 方向位置
+    z_position = asset.data.root_pos_w[:, 2]
+    # 计算奖励
+    reward = (z_position - height_threshold).clamp(min=0)  # 只有当 z_position 大于 height_threshold 时才有奖励
+    print("===========reward.height_reward=============", reward)
+    return reward
+
+def stability_reward(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, threshold: float = 0.1) -> torch.Tensor:
+    """Reward for maintaining stability while climbing."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    # 获取接触状态
+    contacts = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids]
+    # 计算稳定性奖励
+    stability = (contacts > threshold).float()  # 如果接触时间大于阈值，则认为稳定
+    return stability.sum(dim=1)  # 返回每个环境的稳定性奖励
+
+def foot_height_difference_reward(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, height_threshold: float = 0.10, height_top_threshold: float = 0.20, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Reward for the highest two feet being higher than the lowest two feet."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    asset = env.scene[asset_cfg.name]
+    # print("========asset.get_state========", asset.data.body_state_w[:, :])
+    body_state = asset.data.body_state_w
+    # 获取所有脚的 z 方向位置
+    foot_positions = body_state[..., 2]  #.cpu().numpy()  # 获取所有body的 z 位置
+    
+    # 获取脚
+    foot = -((-foot_positions).topk(4, dim=-1).values)
+    highest_one = foot.topk(1, dim=-1).values  # 获取最高的脚
+    lowest_one = -((-foot).topk(1, dim=-1).values)  # 获取最低的脚
+    
+    # 计算高度差
+    height_difference = highest_one - lowest_one
+    
+    # 计算奖励
+    offset = height_top_threshold - height_threshold
+    reward = (height_difference - height_threshold).clamp(min=0).reshape(-1)  # 只有当高度差大于阈值时才有奖励
+    reward = torch.where(reward > offset, torch.tensor(0.0, device=reward.device), reward).reshape(-1)
+
+    print("===========reward.foot_height_difference_reward=============", reward)
+    
+    return reward  # 返回每个 agent 的总奖励
+
+def distance_to_target_reward(env: ManagerBasedRLEnv, target_position: tuple = (-31.5, 22.3), asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Reward for getting closer to the target position."""
+    asset = env.scene[asset_cfg.name]
+    
+    # 获取机器狗的当前位置
+    current_position = asset.data.root_pos_w[:, :2]  # 获取 x 和 y 坐标
+    
+    # 计算与目标点之间的距离
+    distance = torch.norm(current_position - torch.tensor(target_position, device=current_position.device), dim=1)
+    
+    # 计算奖励（距离越小，奖励越高）
+    reward = -distance  # 奖励为负距离，鼓励靠近目标点
+    print("===========reward.distance_to_target_reward=============", reward)
+    return reward  # 返回每个环境的总奖励
