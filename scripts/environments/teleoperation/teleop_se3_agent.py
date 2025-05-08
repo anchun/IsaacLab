@@ -107,6 +107,8 @@ def pre_process_actions(
     else:
         # resolve gripper command
         delta_pose, gripper_command = teleop_data
+        delta_pose[0] = -delta_pose[0]  # invert the x-axis for the gripper
+        delta_pose[5] = -delta_pose[5]  # invert the xy-rotation for the gripper
         # convert to torch
         delta_pose = torch.tensor(delta_pose, dtype=torch.float, device=device).repeat(num_envs, 1)
         gripper_vel = torch.zeros((delta_pose.shape[0], 1), dtype=torch.float, device=device)
@@ -127,7 +129,11 @@ def main():
         env_cfg.commands.object_pose.resampling_time_range = (1.0e9, 1.0e9)
         # add termination condition for reaching the goal otherwise the environment won't reset
         env_cfg.terminations.object_reached_goal = DoneTerm(func=mdp.object_reached_goal)
-    # create environment
+    # create environment with reflection settings
+    env_cfg.sim.render.rendering_mode = "quality"
+    #env_cfg.sim.render.enable_dlssg = False
+    #env_cfg.sim.render.enable_dl_denoiser = False
+    env_cfg.sim.render.carb_settings = {"/rtx/raytracing/invisLightReflectionsRoughnessThreshold": 0.5}
     env = gym.make(args_cli.task, cfg=env_cfg).unwrapped
     # check environment name (for reach , we don't allow the gripper)
     if "Reach" in args_cli.task:
@@ -241,6 +247,8 @@ def main():
             retargeter_device = Se3RelRetargeter(
                 bound_hand=OpenXRDevice.TrackingTarget.HAND_RIGHT, 
                 zero_out_xy_rotation=True,
+                use_wrist_position = True,
+                use_wrist_rotation = True,
                 delta_pos_scale_factor = 20,
                 delta_rot_scale_factor = 20,
             )
@@ -249,8 +257,8 @@ def main():
         control_grip_retargeter = GripperRetargeter(bound_hand=OpenXRDevice.TrackingTarget.HAND_LEFT)
 
         env_cfg.xr = XrCfg(
-            anchor_pos=(1.5, 0.0, -1.0),
-            anchor_rot=(0.707, 0.0, 0.0, 0.707),
+            anchor_pos=(-1.5, 0.6, -0.7),
+            anchor_rot=(0.0, 0.0, 0.0, 1.0),
         )
         # Create hand tracking device with retargeter (in a list)
         teleop_interface = OpenXRDevice(
