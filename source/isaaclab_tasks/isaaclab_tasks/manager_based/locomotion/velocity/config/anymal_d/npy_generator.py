@@ -38,15 +38,15 @@ def on_close(event):
 def generate_trajectory_points():
     # 创建图形
     fig, ax = plt.subplots()
-    ax.set_xlim(-3.5, 3.5)
-    ax.set_ylim(-3.5, 3.5)
+    ax.set_xlim(-2.2, 2.5)
+    ax.set_ylim(-1.0, 2.6)
     ax.set_title("Click to choose waypoints")
     ax.set_xlabel("X Axis")
     ax.set_ylabel("Y Axis")
 
     # 显示背景图
     background_image = mpimg.imread(background_image_path)
-    ax.imshow(background_image, extent=[-3.5, 3.5, -3.5, 3.5], aspect='auto')
+    ax.imshow(background_image, extent=[-2.2, 2.5, -1.0, 2.6], aspect='auto')
 
     # 设置相同的 x 和 y 轴比例
     ax.set_aspect('equal', adjustable='box')

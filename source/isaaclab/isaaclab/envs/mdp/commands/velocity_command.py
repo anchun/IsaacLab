@@ -458,14 +458,20 @@ class UniformVelocityNavigationCommand(UniformVelocityCommand):
         # 随机选择轨迹
         print(env_ids, type(env_ids))
         num_dogs = len(env_ids)
-        selected_trajectories = np.random.choice(len(self.cfg.waypoints), num_dogs)
+        selected_trajectories = [i % len(self.cfg.waypoints) for i in range(num_dogs)]
+        # selected_trajectories = np.random.choice(len(self.cfg.waypoints), num_dogs)
         global current_waypoints
+
+        base_point = np.array([2.52, 2.69])
 
         for i in range(num_dogs):
             trajectory = self.cfg.waypoints[selected_trajectories[i]]
+            if base_pos_w_np[i][0] > 2.5:
+                trajectory = base_point + trajectory
             # 在轨迹点上添加微扰
+            print("trajectory", trajectory)
             perturbed_points = [
-                [point[0] + np.random.uniform(-0.5, 0.5), point[1] + np.random.uniform(-0.5, 0.5)]
+                [point[0] + np.random.uniform(-0.2, 0.2), point[1] + np.random.uniform(-0.2, 0.2)]
                 for point in trajectory
             ]
             # 只在current_waypoints中不存在env_id时才赋值
@@ -484,7 +490,7 @@ class UniformVelocityNavigationCommand(UniformVelocityCommand):
                 distances.append(float('inf'))  # 如果索引超出范围，设置为无穷大
 
         distances = np.array(distances)  # (N,)
-        reached_targets = distances < 0.2  # (N,)
+        reached_targets = distances < 0.6  # (N,)
 
         # 打印调试信息
         for i, env_id in enumerate(env_ids):

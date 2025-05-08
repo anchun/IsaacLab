@@ -911,8 +911,10 @@ def reset_root_state_uniform_with_limit(
         ranges = torch.tensor(range_list, device=asset.device)
         all_ranges.append(ranges)
 
-    polygon = torch.tensor([[-29, 21], [-25, 21], [-25, 5], [-31, 5], [-31, 11], [-39.5, 11], [-39.5, 5], [-41.5, 5], [-41.5, 7.5], [-47, 7.5], [-47, 10], [-41.5, 10], [-41.5, 18], [-39.5, 18], [-39.5, 13.5], [-31, 13.5], [-31, 15], [-29, 15]], dtype=torch.float32)
+    # polygon = torch.tensor([[-29, 21], [-25, 21], [-25, 5], [-31, 5], [-31, 11], [-39.5, 11], [-39.5, 5], [-41.5, 5], [-41.5, 7.5], [-47, 7.5], [-47, 10], [-41.5, 10], [-41.5, 18], [-39.5, 18], [-39.5, 13.5], [-31, 13.5], [-31, 15], [-29, 15]], dtype=torch.float32)
     # polygon = torch.tensor([[-29, 21], [-25, 21], [-25, 5], [-31, 5], [-31, 15], [-29, 15]], dtype=torch.float32)
+    # polygon = torch.tensor([[-2.2, -1.0], [-2.2, 2.6], [2.5, 2.6], [2.5, -1.0]], dtype=torch.float32)
+    polygon = torch.tensor([[10, -1.0], [-2.2, -1.0], [-2.2, 12.0], [10, 12.0]], dtype=torch.float32)
 
     # 生成随机位置并检查有效性
     num_dogs = root_states.shape[0]
@@ -933,10 +935,11 @@ def reset_root_state_uniform_with_limit(
         rand_samples.append((math_utils.sample_uniform(all_ranges[i][:, 0], all_ranges[i][:, 1], (patch_size, 6), device=asset.device)))
     rand_samples.append(math_utils.sample_uniform(all_ranges[num_poses - 1][:, 0], all_ranges[num_poses - 1][:, 1], (last_patch, 6), device=asset.device))
     rand_samples = torch.cat(rand_samples, dim=0)
-    print("=======Rand_samples======", rand_samples.shape)
-    positions = root_states[:, 0:3] + env.scene.env_origins[env_ids] + rand_samples[:, 0:3]
+    
+    positions = root_states[:, 0:3] + env.scene.env_origins[env_ids] # + rand_samples[:, 0:3]
+    print("=======Rand_samples======", rand_samples[0], positions, positions + rand_samples[:, 0:3])
     for i in range(positions.shape[0]):
-        positions[i][2] = 0.72
+        positions[i][2] = 0.5
 
     global good_position
 

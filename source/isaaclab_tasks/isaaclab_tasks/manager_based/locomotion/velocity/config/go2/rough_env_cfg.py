@@ -5,6 +5,7 @@
 
 from isaaclab.utils import configclass
 import numpy as np
+import os
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg
@@ -14,35 +15,68 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import Lo
 ##
 from isaaclab_assets.robots.unitree import UNITREE_GO2_CFG  # isort: skip
 
+# 从 .npy 文件加载轨迹点
+all_trajectory_points = []
+# base_point = [2.52, 2.69]
 
-all_trajectory_points = [
-    [
-    [-28.0, 10.0],
-    [-30.5, 13.5],
-    [-31.5, 22.3]
-    ],
-    [
-    [-21.0, 10.0],
-    [-10.0, 10.0],
-    [3.0, 10.0],
-    [7.0, 10.0],
-    [7.0, 5.0],
-    [7.0, 10.0]
-    ],
-    [
-    [-21.0, 10.0],
-    [-10.0, 10.0],
-    [3.0, 10.0],
-    [7.0, 10.0],
-    [18.0, 1.0],
-    [16.0, 3.0],
-    [16.0, 10.0]
-    ],
-    [
-    [-41.0, 13.0],
-    [-40.0, 30.0],
-    [-41.0, 13.0]
-    ]]    # 训练时用这个
+# 获取当前目录下所有匹配 trajectory_points_*.npy 的文件
+current_directory = os.path.dirname(os.path.abspath(__file__))
+npy_files = [f for f in os.listdir(current_directory) 
+             if f.startswith('trajectory_points_') and f.endswith('.npy')]
+
+# 按数字排序文件（确保顺序正确）
+npy_files.sort(key=lambda x: int(x.split('_')[2].split('.')[0]))
+
+# 加载每个文件并在开头添加基准点
+for file in npy_files:
+    file_path = os.path.join(current_directory, file)
+    trajectory_data = np.load(file_path)
+    # all_trajectory_points.append([base_point] + list(trajectory_data))
+    all_trajectory_points.append(list(trajectory_data))
+
+# all_trajectory_points = [[
+#     [-1.2, -0.5],
+#     [1.8, 2.1]
+# ]]
+# all_trajectory_points_hospital = [
+#     [
+#     [-28.0, 10.0],
+#     [-30.5, 13.5],
+#     [-31.5, 22.3]
+#     ],
+#     [
+#     [-21.0, 10.0],
+#     [-10.0, 10.0],
+#     [3.0, 10.0],
+#     [7.0, 10.0],
+#     [7.0, 5.0],
+#     [7.0, 10.0]
+#     ],
+#     [
+#     [-21.0, 10.0],
+#     [-10.0, 10.0],
+#     [3.0, 10.0],
+#     [7.0, 10.0],
+#     [18.0, 1.0],
+#     [16.0, 3.0],
+#     [16.0, 10.0]
+#     ],
+#     [
+#     [-41.0, 13.0],
+#     [-40.0, 30.0],
+#     [-41.0, 13.0]
+#     ]]    # 训练时用这个
+
+pose_range_hospital = [{"x": (-28.0, -28.0), "y": (10.0, 10.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+            {"x": (-34.0, -34.0), "y": (12.0, 12.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+            {"x": (-36.0, -36.0), "y": (12.0, 12.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+            {"x": (-40.5, -40.5), "y": (5.0, 5.0), "z": (0.72, 0.72), "yaw": (0, 0)},
+            {"x": (-44.0, -44.0), "y": (8.5, 8.5), "z": (0.72, 0.72), "yaw": (0, 0)},
+            {"x": (-40.5, -40.5), "y": (18.0, 18.0), "z": (0.72, 0.72), "yaw": (0, 0)}]   # hospital
+pose_range_showroom = [{"x": (4.8, 4.8), "y": (9.5, 9.5), "z": (0.3, 0.3), "yaw": (0, 0)}] #,
+                    #    {"x": (2.0, 2.0), "y": (2.0, 2.0), "z": (0.3, 0.3), "yaw": (0, 0)},
+                    #    {"x": (-0.5, -0.5), "y": (2.1, 2.1), "z": (0.3, 0.3), "yaw": (0, 0)}]
+
 
 @configclass
 class UnitreeGo2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
@@ -67,12 +101,7 @@ class UnitreeGo2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.events.base_external_force_torque.params["asset_cfg"].body_names = "base"
         self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
         self.events.reset_base.params = {
-            "pose_range": [{"x": (-28.0, -28.0), "y": (10.0, 10.0), "z": (0.72, 0.72), "yaw": (0, 0)},
-                           {"x": (-34.0, -34.0), "y": (12.0, 12.0), "z": (0.72, 0.72), "yaw": (0, 0)},
-                           {"x": (-36.0, -36.0), "y": (12.0, 12.0), "z": (0.72, 0.72), "yaw": (0, 0)},
-                           {"x": (-40.5, -40.5), "y": (5.0, 5.0), "z": (0.72, 0.72), "yaw": (0, 0)},
-                           {"x": (-44.0, -44.0), "y": (8.5, 8.5), "z": (0.72, 0.72), "yaw": (0, 0)},
-                           {"x": (-40.5, -40.5), "y": (18.0, 18.0), "z": (0.72, 0.72), "yaw": (0, 0)}],   # hospital
+            "pose_range": pose_range_showroom,
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
@@ -112,7 +141,7 @@ class AnymalDRoughWithNavigationCommandsCfg:
 @configclass
 class UnitreeGo2RoughEnvCfg_PLAY(UnitreeGo2RoughEnvCfg):
     commands: AnymalDRoughWithNavigationCommandsCfg = AnymalDRoughWithNavigationCommandsCfg()
-    
+
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
@@ -120,7 +149,8 @@ class UnitreeGo2RoughEnvCfg_PLAY(UnitreeGo2RoughEnvCfg):
         self.episode_length_s = 60.0
         self.scene.terrain.terrain_type = "usd"
         # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Simple_Room/simple_room_dog.usd"
-        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Hospital/hospital_dog_very_low.usd"
+        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/AITower/L_ShowRoom_01.usd"#demo_showroom.usd"
+        # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Office/office.usd"
         # self.scene.terrain.usd_path = r"D:\fsy\scene\Data_01_RobotArm\L_Workshop_01_latest.usd"
         self.scene.sky_light = None
 
