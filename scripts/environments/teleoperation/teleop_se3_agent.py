@@ -160,6 +160,7 @@ def main():
         nonlocal should_reset_recording_instance
         should_reset_recording_instance = True
         print("Recording instance reset.")
+        start_teleoperation()
 
     def start_teleoperation():
         """Activate teleoperation control of the robot.
