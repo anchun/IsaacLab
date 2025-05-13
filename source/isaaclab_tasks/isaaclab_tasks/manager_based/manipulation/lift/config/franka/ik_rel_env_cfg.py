@@ -18,7 +18,7 @@ from . import joint_pos_env_cfg
 # Pre-defined configs
 ##
 from isaaclab_assets.robots.franka import FRANKA_PANDA_HIGH_PD_CFG  # isort: skip
-
+from isaaclab_assets.robots.universal_robots import UR10_CFG
 
 @configclass
 class FrankaCubeLiftEnvCfg(joint_pos_env_cfg.FrankaCubeLiftEnvCfg):
@@ -60,15 +60,22 @@ class FrankaCubeLiftEnvCfg_PLAY(FrankaCubeLiftEnvCfg):
         self.scene.table = None
         self.scene.targetBox = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/TargetBox",
-            init_state=RigidObjectCfg.InitialStateCfg(pos=[-2.3, 1.0, 0.1], rot=[0.707, 0, 0, -0.707]),
+            init_state=RigidObjectCfg.InitialStateCfg(pos=[-2.3, -0.4, 0.1], rot=[0.707, 0, 0, -0.707]),
             spawn=UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/KLT_Bin/small_KLT.usd"),
         )
         # robots
-        self.scene.robot.init_state.pos = [-2.8, 0.6, 0.0]
+        self.scene.robot.init_state.pos = [-2.8, -1.0, 0.0]
         self.scene.robot.init_state.rot = [1.0, 0, 0, 0.0]
+        self.scene.robot_ur10 = UR10_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot_UR10")
+        self.scene.robot_ur10.init_state.pos = [-2.8, 0.6, 0.0]
+        self.scene.robot_ur10.init_state.rot = [1.0, 0, 0, 0.0]
+        self.scene.robot_ur10.spawn.rigid_props.disable_gravity = True
+        self.scene.robot_ur10.actuators["arm"].stiffness = 0.0
+        self.scene.robot_ur10.actuators["arm"].damping = 0.0
+        
         # object
         self.scene.object.spawn.usd_path = f"{ISAAC_NUCLEUS_DIR}/Props/Rubiks_Cube/rubiks_cube.usd"
-        self.scene.object.init_state.pos = [-2.2, 0.6, 0.1]
+        self.scene.object.init_state.pos = [-2.2, -1.0, 0.1]
         self.scene.object.spawn.scale = (0.7, 0.7, 0.7)
         self.events.reset_object_position = EventTerm(
             func=mdp.reset_root_state_uniform,

@@ -107,8 +107,9 @@ def pre_process_actions(
     else:
         # resolve gripper command
         delta_pose, gripper_command = teleop_data
-        delta_pose[0] = -delta_pose[0]  # invert the x-axis for the gripper
-        delta_pose[5] = -delta_pose[5]  # invert the xy-rotation for the gripper
+        if "handtracking" in args_cli.teleop_device.lower():
+            delta_pose[0] = -delta_pose[0]  # invert the x-axis for the gripper
+            delta_pose[5] = -delta_pose[5]  # invert the xy-rotation for the gripper
         # convert to torch
         delta_pose = torch.tensor(delta_pose, dtype=torch.float, device=device).repeat(num_envs, 1)
         gripper_vel = torch.zeros((delta_pose.shape[0], 1), dtype=torch.float, device=device)
@@ -258,7 +259,7 @@ def main():
         control_grip_retargeter = GripperRetargeter(bound_hand=OpenXRDevice.TrackingTarget.HAND_LEFT)
 
         env_cfg.xr = XrCfg(
-            anchor_pos=(-1.5, 0.6, -0.7),
+            anchor_pos=(-1.5, -1.0, -0.7),
             anchor_rot=(0.0, 0.0, 0.0, 1.0),
         )
         # Create hand tracking device with retargeter (in a list)
