@@ -157,7 +157,7 @@ class UnitreeGo2RoughEnvCfg_PLAY(UnitreeGo2RoughEnvCfg):
         self.scene.terrain.terrain_type = "usd"
         # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Simple_Room/simple_room_dog.usd"
         # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Data_02_ShowRoom/L_ShowRoom_01.usd"#demo_showroom.usd"
-        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/AITower/L_ShowRoom_01.usd"
+        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Data_02_ShowRoom/L_ShowRoom_01.usd"
         # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Office/office.usd"
         # self.scene.terrain.usd_path = r"D:\fsy\scene\Data_01_RobotArm\L_Workshop_01_latest.usd"
         self.scene.sky_light = None
