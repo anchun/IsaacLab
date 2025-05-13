@@ -7,6 +7,7 @@ from isaaclab.utils import configclass
 import numpy as np
 import os
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.envs import ViewerCfg
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg
 
@@ -145,6 +146,8 @@ class AnymalDRoughWithNavigationCommandsCfg:
 @configclass
 class UnitreeGo2RoughEnvCfg_PLAY(UnitreeGo2RoughEnvCfg):
     commands: AnymalDRoughWithNavigationCommandsCfg = AnymalDRoughWithNavigationCommandsCfg()
+    
+    viewer = ViewerCfg(eye=(3.6, 3.6, 1.6), lookat=(0.0, 0.7, 1.0))
 
     def __post_init__(self):
         # post init of parent
