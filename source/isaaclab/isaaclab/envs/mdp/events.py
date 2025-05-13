@@ -933,10 +933,12 @@ def reset_root_state_uniform_with_limit(
         # print("upper:", all_ranges[i][start:end_index, 1])
         # print("lower:", all_ranges[i][start:end_index, 0])
         rand_samples.append((math_utils.sample_uniform(all_ranges[i][:, 0], all_ranges[i][:, 1], (patch_size, 6), device=asset.device)))
+        print("===patch====", patch_size, i, all_ranges[i])
     rand_samples.append(math_utils.sample_uniform(all_ranges[num_poses - 1][:, 0], all_ranges[num_poses - 1][:, 1], (last_patch, 6), device=asset.device))
+    print("===patch====", patch_size, num_poses-1, all_ranges[num_poses - 1])
     rand_samples = torch.cat(rand_samples, dim=0)
     
-    positions = root_states[:, 0:3] + env.scene.env_origins[env_ids] # + rand_samples[:, 0:3]
+    positions = rand_samples[:, 0:3] #+ root_states[:, 0:3] + env.scene.env_origins[env_ids]
     print("=======Rand_samples======", rand_samples[0], positions, positions + rand_samples[:, 0:3])
     for i in range(positions.shape[0]):
         positions[i][2] = 0.5
@@ -944,22 +946,24 @@ def reset_root_state_uniform_with_limit(
     global good_position
 
     # 检查位置是否有效
-    for i in range(num_dogs):
-        valid_position_i = check_valid_position(positions[i], polygon)  # 需要实现这个函数
-        if valid_position_i:
-            valid_position[i] = True
-            good_position.append(positions[i])
-        
-    for i in range(num_dogs):
-        if not valid_position[i]:
-            valid_position_i = False
-            while not valid_position_i:
-                # rand_samples_i = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
-                # positions_i = (root_states[:, 0:3] + env.scene.env_origins[env_ids] + rand_samples_i[:, 0:3])[0]
-                positions_i = random.choice(good_position)
-                if check_valid_position(positions_i, polygon):
-                    valid_position_i = True
-                    positions[i] = positions_i
+    need_check = False
+    if need_check:
+        for i in range(num_dogs):
+            valid_position_i = check_valid_position(positions[i], polygon)  # 需要实现这个函数
+            if valid_position_i:
+                valid_position[i] = True
+                good_position.append(positions[i])
+            
+        for i in range(num_dogs):
+            if not valid_position[i]:
+                valid_position_i = False
+                while not valid_position_i:
+                    # rand_samples_i = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
+                    # positions_i = (root_states[:, 0:3] + env.scene.env_origins[env_ids] + rand_samples_i[:, 0:3])[0]
+                    positions_i = random.choice(good_position)
+                    if check_valid_position(positions_i, polygon):
+                        valid_position_i = True
+                        positions[i] = positions_i
 
     # 计算姿态
     orientations_delta = math_utils.quat_from_euler_xyz(rand_samples[:, 3], rand_samples[:, 4], rand_samples[:, 5])
