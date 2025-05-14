@@ -60,7 +60,7 @@ class FrankaCubeLiftEnvCfg_PLAY(FrankaCubeLiftEnvCfg):
         self.scene.table = None
         self.scene.targetBox = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/TargetBox",
-            init_state=RigidObjectCfg.InitialStateCfg(pos=[-2.3, -0.4, 0.1], rot=[0.707, 0, 0, -0.707]),
+            init_state=RigidObjectCfg.InitialStateCfg(pos=[-2.3, -0.6, 0.1], rot=[0.707, 0, 0, -0.707]),
             spawn=UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/KLT_Bin/small_KLT.usd"),
         )
         # robots

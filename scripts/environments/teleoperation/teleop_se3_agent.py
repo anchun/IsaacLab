@@ -108,7 +108,7 @@ def pre_process_actions(
         # resolve gripper command
         delta_pose, gripper_command = teleop_data
         if "handtracking" in args_cli.teleop_device.lower():
-            delta_pose[0] = -delta_pose[0]  # invert the x-axis for the gripper
+            #delta_pose[0] = -delta_pose[0]  # invert the x-axis for the gripper
             delta_pose[5] = -delta_pose[5]  # invert the xy-rotation for the gripper
         # convert to torch
         delta_pose = torch.tensor(delta_pose, dtype=torch.float, device=device).repeat(num_envs, 1)
@@ -301,15 +301,15 @@ def main():
         with torch.inference_mode():
             # get device command
             teleop_data = teleop_interface.advance()
-
+            # compute actions based on environment
+            actions = pre_process_actions((teleop_data[0], teleop_data[1]), env.num_envs, env.device)
+            if "handtracking" in args_cli.teleop_device.lower():
+                left_hand_reset_cmd = teleop_data[2]
+                if left_hand_reset_cmd:
+                    reset_recording_instance()
+                        
             # Only apply teleop commands when active
             if teleoperation_active:
-                # compute actions based on environment
-                actions = pre_process_actions((teleop_data[0], teleop_data[1]), env.num_envs, env.device)
-                if "handtracking" in args_cli.teleop_device.lower():
-                    left_hand_reset_cmd = teleop_data[2]
-                    if left_hand_reset_cmd:
-                        reset_recording_instance()
                 # apply actions
                 env.step(actions)
             else:
