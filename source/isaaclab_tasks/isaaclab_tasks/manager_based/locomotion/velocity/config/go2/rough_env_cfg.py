@@ -7,7 +7,6 @@ from isaaclab.utils import configclass
 import numpy as np
 import os
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.envs import ViewerCfg
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg
 
@@ -74,13 +73,18 @@ pose_range_hospital = [{"x": (-28.0, -28.0), "y": (10.0, 10.0), "z": (0.72, 0.72
             {"x": (-40.5, -40.5), "y": (5.0, 5.0), "z": (0.72, 0.72), "yaw": (0, 0)},
             {"x": (-44.0, -44.0), "y": (8.5, 8.5), "z": (0.72, 0.72), "yaw": (0, 0)},
             {"x": (-40.5, -40.5), "y": (18.0, 18.0), "z": (0.72, 0.72), "yaw": (0, 0)}]   # hospital
-pose_range_showroom = [{"x": (-2.1, -2.1), "y": (2.5, 2.5), "z": (0.3, 0.3), "yaw": (0, 0)},
-                       {"x": (-2.1, -2.1), "y": (-1.0, -1.0), "z": (0.3, 0.3), "yaw": (0, 0)},
-                       {"x": (0.1, 0.1), "y": (0.8, 0.8), "z": (0.3, 0.3), "yaw": (0, 0)},
-                       {"x": (2.4, 2.4), "y": (2.5, 2.5), "z": (0.3, 0.3), "yaw": (0, 0)},
-                       {"x": (-1.1, -1.1), "y": (0.8, 0.8), "z": (0.3, 0.3), "yaw": (0, 0)}] #,
+# pose_range_showroom = [{"x": (-2.1, -2.1), "y": (2.5, 2.5), "z": (0.3, 0.3), "yaw": (0, 0)},
+#                        {"x": (-2.1, -2.1), "y": (-1.0, -1.0), "z": (0.3, 0.3), "yaw": (0, 0)},
+#                        {"x": (0.1, 0.1), "y": (0.8, 0.8), "z": (0.3, 0.3), "yaw": (0, 0)},
+#                        {"x": (2.4, 2.4), "y": (2.5, 2.5), "z": (0.3, 0.3), "yaw": (0, 0)},
+#                        {"x": (-1.1, -1.1), "y": (0.8, 0.8), "z": (0.3, 0.3), "yaw": (0, 0)}] #,
                     #    {"x": (2.0, 2.0), "y": (2.0, 2.0), "z": (0.3, 0.3), "yaw": (0, 0)},
                     #    {"x": (-0.5, -0.5), "y": (2.1, 2.1), "z": (0.3, 0.3), "yaw": (0, 0)}]
+pose_range_showroom = [{"x": (-2.1, -2.1), "y": (2.2, 2.2), "z": (0.3, 0.3), "yaw": (0, 0)},
+                       {"x": (-2.1, -2.1), "y": (-0.5, -0.5), "z": (0.3, 0.3), "yaw": (0, 0)},
+                       {"x": (2.4, 2.4), "y": (-0.5, -0.5), "z": (0.3, 0.3), "yaw": (0, 0)},
+                       {"x": (2.4, 2.4), "y": (2.0, 2.0), "z": (0.3, 0.3), "yaw": (0, 0)},
+                       {"x": (0.1, 0.1), "y": (0.3, 0.3), "z": (0.3, 0.3), "yaw": (0, 0)}]
 
 
 @configclass
@@ -146,8 +150,6 @@ class AnymalDRoughWithNavigationCommandsCfg:
 @configclass
 class UnitreeGo2RoughEnvCfg_PLAY(UnitreeGo2RoughEnvCfg):
     commands: AnymalDRoughWithNavigationCommandsCfg = AnymalDRoughWithNavigationCommandsCfg()
-    
-    viewer = ViewerCfg(eye=(3.6, 3.6, 1.6), lookat=(0.0, 0.7, 1.0))
 
     def __post_init__(self):
         # post init of parent
@@ -156,8 +158,8 @@ class UnitreeGo2RoughEnvCfg_PLAY(UnitreeGo2RoughEnvCfg):
         self.episode_length_s = 60.0
         self.scene.terrain.terrain_type = "usd"
         # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Simple_Room/simple_room_dog.usd"
-        # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Data_02_ShowRoom/L_ShowRoom_01.usd"#demo_showroom.usd"
-        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Data_02_ShowRoom/L_ShowRoom_01.usd"
+        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Data_02_ShowRoom/L_ShowRoom_01.usd"#demo_showroom.usd"
+        # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/AITower/L_ShowRoom_01.usd"
         # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Office/office.usd"
         # self.scene.terrain.usd_path = r"D:\fsy\scene\Data_01_RobotArm\L_Workshop_01_latest.usd"
         self.scene.sky_light = None
