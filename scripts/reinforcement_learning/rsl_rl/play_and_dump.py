@@ -29,7 +29,7 @@ parser.add_argument(
     action="store_true",
     help="Use the pre-trained checkpoint from Nucleus.",
 )
-parser.add_argument("--real-time", action="store_true", default=True, help="Run in real-time, if possible.")
+parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -122,6 +122,8 @@ def main():
         colorize_semantic_segmentation=camera.cfg.colorize_semantic_segmentation,
     )
 
+    env_cfg.sim.render.rendering_mode = "quality"
+    env_cfg.sim.render.carb_settings = {"/rtx/rendermode": "RealTimePathTracing"}
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode=None)
 
