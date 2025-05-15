@@ -162,8 +162,8 @@ class UniformVelocityCommand(CommandTerm):
         
         # 避障参数设置
         min_distance = 0.8  # 最小安全距离
-        max_distance = 3.0  # 最大影响距离
-        max_avoidance_force = 10.0  # 最大避障力
+        max_distance = 1.5  # 最大影响距离
+        max_avoidance_force = 0.8  # 最大避障力
         
         for i in range(num_dogs):
             for j in range(num_dogs):
@@ -212,6 +212,199 @@ class UniformVelocityCommand(CommandTerm):
             if torch.any(avoidance_velocities[i] != 0):
                 print(f"Dog {env_ids[i]}: Original vel: {original_vel}, Avoidance vel: {avoidance_vel}, "
                     f"Final vel: {combined_vel}")
+
+        # heading target
+        if self.cfg.heading_command:
+            self.heading_target[env_ids] = r.uniform_(*self.cfg.ranges.heading)
+            # update heading envs
+            self.is_heading_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_heading_envs
+        # update standing envs
+        self.is_standing_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_standing_envs
+
+    def _resample_command_demo1(self, env_ids: Sequence[int]):
+        # 首先获取当前位置信息
+        base_pos_w = self.robot.data.root_pos_w.clone()
+        base_pos_w_np = base_pos_w[env_ids, :2].cpu().numpy()  # (N, 2)
+        base_vel_w = self.robot.data.root_lin_vel_b[env_ids, :2].cpu().numpy()  # 获取当前速度
+
+        # 生成基础速度命令
+        r = torch.empty(len(env_ids), device=self.device)
+        # -- linear velocity - x direction
+        self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
+        # -- linear velocity - y direction
+        self.vel_command_b[env_ids, 1] = r.uniform_(*self.cfg.ranges.lin_vel_y)
+        # -- ang vel yaw - rotation around z
+        self.vel_command_b[env_ids, 2] = r.uniform_(*self.cfg.ranges.ang_vel_z)
+
+        # 计算避障速度调整
+        num_dogs = len(env_ids)
+        avoidance_velocities = torch.zeros((num_dogs, 2), device=self.device)
+        
+        # 避障参数设置
+        min_distance = 0.5  # 最小安全距离
+        max_distance = 0.8  # 最大影响距离
+        max_avoidance_force = 0.5  # 最大避障力
+        
+        # 只对最后一只狗进行避障
+        if num_dogs >= 1:
+            last_dog_idx = num_dogs - 1  # 最后一只狗的索引
+            last_dog_pos = base_pos_w_np[last_dog_idx]
+            last_dog_vel = base_vel_w[last_dog_idx]
+            
+            for j in range(num_dogs - 1):  # 只检查与其他狗的距离
+                # 计算与目标狗之间的距离向量
+                pos_diff = last_dog_pos - base_pos_w_np[j]
+                distance = np.linalg.norm(pos_diff)
+                
+                if distance < max_distance:
+                    # 计算避障力的强度（距离越近，力越大）
+                    if distance < min_distance:
+                        force_magnitude = max_avoidance_force
+                    else:
+                        # 在min_distance和max_distance之间平滑过渡
+                        force_magnitude = max_avoidance_force * (1 - (distance - min_distance)/(max_distance - min_distance))
+                    
+                    # 计算避障方向
+                    if distance > 0:
+                        # 获取当前位置到目标狗的方向向量
+                        avoid_dir = pos_diff / distance
+                        
+                        # 计算当前速度方向
+                        if np.linalg.norm(last_dog_vel) > 0.1:  # 如果速度足够大
+                            vel_dir = last_dog_vel / np.linalg.norm(last_dog_vel)
+                            # 计算速度方向与避障方向的点积
+                            dot_product = np.dot(vel_dir, avoid_dir)
+                            
+                            # 如果速度方向与避障方向夹角小于90度（点积大于0）
+                            # 说明正在接近目标狗，需要调整避障方向
+                            if dot_product > 0:
+                                # 计算垂直于避障方向的方向
+                                perp_dir = np.array([-avoid_dir[1], avoid_dir[0]])
+                                # 根据速度方向选择垂直方向
+                                if np.dot(vel_dir, perp_dir) < 0:
+                                    perp_dir = -perp_dir
+                                # 将避障方向调整为垂直方向
+                                avoid_dir = perp_dir
+                        else:
+                            # 如果速度很小，使用垂直于避障方向的方向
+                            avoid_dir = np.array([-pos_diff[1], pos_diff[0]]) / distance
+                            # 随机选择垂直方向
+                            if np.random.random() < 0.5:
+                                avoid_dir = -avoid_dir
+                    else:
+                        # 如果距离为0，随机选择一个方向
+                        angle = np.random.uniform(0, 2*np.pi)
+                        avoid_dir = np.array([np.cos(angle), np.sin(angle)])
+                    
+                    # 将避障力转换为速度调整
+                    avoidance_velocities[last_dog_idx] += torch.tensor(avoid_dir * force_magnitude, device=self.device)
+        
+        # 应用避障速度调整（只对最后一只狗）
+        if num_dogs >= 1:
+            last_dog_idx = num_dogs - 1
+            original_vel = self.vel_command_b[env_ids[last_dog_idx], :2]
+            avoidance_vel = avoidance_velocities[last_dog_idx]
+            
+            # 计算合成速度
+            combined_vel = original_vel + avoidance_vel
+            
+            # 限制最大速度
+            max_speed = torch.norm(original_vel)  # 使用原始速度的大小作为最大速度
+            current_speed = torch.norm(combined_vel)
+            
+            if current_speed > max_speed:
+                combined_vel = combined_vel * (max_speed / current_speed)
+            
+            # 更新速度命令
+            self.vel_command_b[env_ids[last_dog_idx], :2] = combined_vel
+            
+            # 打印调试信息
+            if torch.any(avoidance_velocities[last_dog_idx] != 0):
+                print(f"Last dog {env_ids[last_dog_idx]}: Original vel: {original_vel}, Avoidance vel: {avoidance_vel}, "
+                    f"Final vel: {combined_vel}")
+
+        # heading target
+        if self.cfg.heading_command:
+            self.heading_target[env_ids] = r.uniform_(*self.cfg.ranges.heading)
+            # update heading envs
+            self.is_heading_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_heading_envs
+        # update standing envs
+        self.is_standing_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_standing_envs
+
+    def _resample_command_demo2(self, env_ids: Sequence[int]):
+        # 首先获取当前位置信息
+        base_pos_w = self.robot.data.root_pos_w.clone()
+        base_pos_w_np = base_pos_w[env_ids, :2].cpu().numpy()  # (N, 2)
+
+        # 生成基础速度命令
+        r = torch.empty(len(env_ids), device=self.device)
+        # -- linear velocity - x direction
+        self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
+        # -- linear velocity - y direction
+        self.vel_command_b[env_ids, 1] = r.uniform_(*self.cfg.ranges.lin_vel_y)
+        # -- ang vel yaw - rotation around z
+        self.vel_command_b[env_ids, 2] = r.uniform_(*self.cfg.ranges.ang_vel_z)
+
+        # 计算避障速度调整
+        num_dogs = len(env_ids)
+        avoidance_velocities = torch.zeros((num_dogs, 2), device=self.device)
+        
+        # 避障参数设置
+        min_distance = 0.8  # 最小安全距离
+        max_distance = 1.5  # 最大影响距离
+        max_avoidance_force = 0.8  # 最大避障力
+        
+        # 只对最后两只狗进行避障
+        if num_dogs >= 2:
+            last_two_dogs = [num_dogs-2, num_dogs-1]  # 最后两只狗的索引
+            
+            for i in last_two_dogs:
+                for j in range(num_dogs):
+                    if i != j:  # 不与自己比较
+                        # 计算两只狗之间的距离向量
+                        pos_diff = base_pos_w_np[i] - base_pos_w_np[j]
+                        distance = np.linalg.norm(pos_diff)
+                        
+                        if distance < max_distance:
+                            # 计算避障力的强度（距离越近，力越大）
+                            if distance < min_distance:
+                                force_magnitude = max_avoidance_force
+                            else:
+                                # 在min_distance和max_distance之间平滑过渡
+                                force_magnitude = max_avoidance_force * (1 - (distance - min_distance)/(max_distance - min_distance))
+                            
+                            # 计算避障方向（归一化）
+                            if distance > 0:
+                                avoid_dir = pos_diff / distance
+                            else:
+                                avoid_dir = np.array([1.0, 0.0])  # 如果距离为0，给一个默认方向
+                            
+                            # 将避障力转换为速度调整
+                            avoidance_velocities[i] += torch.tensor(avoid_dir * force_magnitude, device=self.device)
+        
+        # 应用避障速度调整（只对最后两只狗）
+        if num_dogs >= 2:
+            for i in [num_dogs-2, num_dogs-1]:
+                original_vel = self.vel_command_b[env_ids[i], :2]
+                avoidance_vel = avoidance_velocities[i]
+                
+                # 计算合成速度
+                combined_vel = original_vel + avoidance_vel
+                
+                # 限制最大速度
+                max_speed = torch.norm(original_vel)  # 使用原始速度的大小作为最大速度
+                current_speed = torch.norm(combined_vel)
+                
+                if current_speed > max_speed:
+                    combined_vel = combined_vel * (max_speed / current_speed)
+                
+                # 更新速度命令
+                self.vel_command_b[env_ids[i], :2] = combined_vel
+                
+                # 打印调试信息
+                if torch.any(avoidance_velocities[i] != 0):
+                    print(f"Dog {env_ids[i]}: Original vel: {original_vel}, Avoidance vel: {avoidance_vel}, "
+                        f"Final vel: {combined_vel}")
 
         # heading target
         if self.cfg.heading_command:
@@ -515,7 +708,7 @@ class UniformVelocityNavigationCommand_one_trajectory(UniformVelocityCommand):
         print("Target headings:", self.heading_target[env_ids])
 
 current_waypoints = {}
-class UniformVelocityNavigationCommand(UniformVelocityCommand):
+class UniformVelocityNavigationCommand_ori(UniformVelocityCommand):
     """Command generator that generates a velocity command in SE(2) for navigation tasks."""
 
     cfg: UniformVelocityNavigationCommandCfg
@@ -600,6 +793,131 @@ class UniformVelocityNavigationCommand(UniformVelocityCommand):
 
         # 打印目标方向
         print("Target headings:", self.heading_target[env_ids])
+
+
+class UniformVelocityNavigationCommand(UniformVelocityCommand):
+    """Command generator that generates a velocity command in SE(2) for navigation tasks."""
+
+    cfg: UniformVelocityNavigationCommandCfg
+
+    def __init__(self, cfg: UniformVelocityNavigationCommandCfg, env: ManagerBasedEnv):
+        super().__init__(cfg, env)
+        self.waypointIndex = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
+        # 添加避障相关参数
+        self.forward_check_distance = 1.0  # 前进方向检查距离
+        self.stop_dogs = {}  # 记录需要停止的狗
+
+    def _resample_command(self, env_ids):
+        super()._resample_command(env_ids)
+        r = torch.empty(len(env_ids), device=self.device)
+
+        # 重置初始索引
+        reset_indices = (self.command_counter[env_ids] <= 1)
+        if reset_indices.any():
+            self.waypointIndex[env_ids[reset_indices]] = 0
+            # 重置停止状态
+            for idx in env_ids[reset_indices]:
+                if idx.item() in self.stop_dogs:
+                    del self.stop_dogs[idx.item()]
+
+        # 获取当前位置和朝向信息
+        base_pos_w = self.robot.data.root_pos_w.clone()
+        base_pos_w_np = base_pos_w[env_ids, :2].cpu().numpy()  # (N, 2)
+        base_heading = self.robot.data.heading_w[env_ids].cpu().numpy()  # 获取当前朝向
+
+        # 随机选择轨迹
+        num_dogs = len(env_ids)
+        selected_trajectories = [i % len(self.cfg.waypoints) for i in range(num_dogs)]
+        global current_waypoints
+
+        base_point = np.array([2.52, 2.69])
+
+        # 检查每只狗的前进方向是否有其他狗
+        for i in range(num_dogs):
+            env_id = env_ids[i].item()
+            current_pos = base_pos_w_np[i]
+            current_heading = base_heading[i]
+            
+            # 计算前进方向向量
+            forward_dir = np.array([np.cos(current_heading), np.sin(current_heading)])
+            
+            # 检查其他狗是否在前进方向上
+            should_stop = False
+            for j in range(num_dogs):
+                if i != j:  # 不与自己比较
+                    other_pos = base_pos_w_np[j]
+                    # 计算到其他狗的方向向量
+                    to_other = other_pos - current_pos
+                    distance = np.linalg.norm(to_other)
+                    
+                    if distance < self.forward_check_distance:
+                        # 计算到其他狗的方向与前进方向的夹角
+                        to_other_dir = to_other / distance
+                        dot_product = np.dot(forward_dir, to_other_dir)
+                        
+                        # 如果夹角小于45度（cos(45°) ≈ 0.707），说明其他狗在前进方向上
+                        if dot_product > 0.707:
+                            should_stop = True
+                            break
+            
+            # 更新停止状态
+            if should_stop:
+                if env_id not in self.stop_dogs:
+                    print(f"Dog {env_id} stopping due to dog in forward path")
+                self.stop_dogs[env_id] = True
+            else:
+                if env_id in self.stop_dogs:
+                    print(f"Dog {env_id} resuming movement")
+                self.stop_dogs[env_id] = False
+
+        # 处理轨迹选择和避障
+        for i in range(num_dogs):
+            env_id = env_ids[i].item()
+            trajectory = self.cfg.waypoints[selected_trajectories[i]]
+            if base_pos_w_np[i][0] > 2.5:
+                trajectory = base_point + trajectory
+
+            # 如果狗需要停止，设置速度为0
+            if self.stop_dogs.get(env_id, False):
+                self.vel_command_b[env_id, :2] = torch.zeros(2, device=self.device)
+                continue
+
+            # 在轨迹点上添加微扰
+            if env_id not in current_waypoints:
+                perturbed_points = [
+                    [point[0] + np.random.uniform(-0.2, 0.2), point[1] + np.random.uniform(-0.2, 0.2)]
+                    for point in trajectory
+                ]
+                current_waypoints[env_id] = perturbed_points
+
+            # 获取当前目标点
+            current_idx = self.waypointIndex[env_id].item()
+            if current_idx < len(current_waypoints[env_id]):
+                target_point = current_waypoints[env_id][current_idx]
+                # 计算目标方向
+                heading = target_point - base_pos_w_np[i]
+                heading_angle = math.atan2(heading[1], heading[0])
+                self.heading_target[env_id] = torch.tensor(heading_angle).to(self.device)
+
+        # 更新到达目标点的机器狗的目标点索引
+        for i, env_id in enumerate(env_ids):
+            if self.stop_dogs.get(env_id.item(), False):
+                continue  # 如果狗停止，不更新轨迹点索引
+            
+            current_idx = self.waypointIndex[env_id].item()
+            if current_idx < len(current_waypoints[env_id.item()]):
+                target_point = current_waypoints[env_id.item()][current_idx]
+                distance = np.linalg.norm(base_pos_w_np[i] - target_point)
+                
+                if distance < 0.6:  # 到达目标点
+                    next_idx = (current_idx + 1) % len(current_waypoints[env_id.item()])
+                    self.waypointIndex[env_id] = next_idx
+
+        # 打印调试信息
+        for i, env_id in enumerate(env_ids):
+            status = "stopped" if self.stop_dogs.get(env_id.item(), False) else "moving"
+            print(f"Dog {env_id}: pos={base_pos_w_np[i]}, status={status}, "
+                  f"target={current_waypoints[env_id.item()][self.waypointIndex[env_id].item()]}")
 
 
 class UniformVelocityNavigationCommand_demo(UniformVelocityCommand):
