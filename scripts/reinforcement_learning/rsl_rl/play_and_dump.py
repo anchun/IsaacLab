@@ -99,18 +99,18 @@ def main():
             width=1920,
             data_types=[
                 "rgb",
-                "normals",
-                "distance_to_image_plane",
+                #"normals",
+                #"distance_to_image_plane",
                 "semantic_segmentation",
                 #"instance_segmentation_fast",
             ],
             colorize_semantic_segmentation=True,
-            colorize_instance_id_segmentation=True,
-            colorize_instance_segmentation=True,
+            colorize_instance_id_segmentation=False,
+            colorize_instance_segmentation=False,
             spawn=sim_utils.PinholeCameraCfg(
-                focal_length=10.4775, focus_distance=400, horizontal_aperture=20.955, clipping_range=(0.01, 1.0e5)
+                focal_length=8, focus_distance=400, horizontal_aperture=20.955, clipping_range=(0.01, 1.0e5)
             ),
-            offset=CameraCfg.OffsetCfg(pos=(0.0, 4.8, 1.5), rot=(0.0, 0.0, -0.766, 0.643), convention="ros"),
+            offset=CameraCfg.OffsetCfg(pos=(3.0, 2.0, 1.25), rot=(0.50311, 0.37008, 0.4817, 0.61472), convention="opengl"),
         )
     camera = Camera(cfg = cameraConfig)
     output_dir = os.path.join(os.getcwd(), "outputs", "camera")
@@ -143,10 +143,10 @@ def main():
     # export policy to onnx/jit
     export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
     export_policy_as_jit(
-        ppo_runner.alg.actor_critic, ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.pt"
+        ppo_runner.alg.policy, ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.pt"
     )
     export_policy_as_onnx(
-        ppo_runner.alg.actor_critic, normalizer=ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.onnx"
+        ppo_runner.alg.policy, normalizer=ppo_runner.obs_normalizer, path=export_model_dir, filename="policy.onnx"
     )
 
     dt = env.unwrapped.physics_dt
