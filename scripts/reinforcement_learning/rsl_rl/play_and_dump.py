@@ -110,7 +110,7 @@ def main():
             spawn=sim_utils.PinholeCameraCfg(
                 focal_length=8, focus_distance=400, horizontal_aperture=20.955, clipping_range=(0.01, 1.0e5)
             ),
-            offset=CameraCfg.OffsetCfg(pos=(3.0, 2.0, 1.25), rot=(0.50311, 0.37008, 0.4817, 0.61472), convention="opengl"),
+            offset=CameraCfg.OffsetCfg(pos=(2.68315, -1.48743, 1.03722), rot=(0.67942, 0.60328, 0.28932, 0.30122), convention="opengl"),
         )
     camera = Camera(cfg = cameraConfig)
     output_dir = os.path.join(os.getcwd(), "outputs", "camera")

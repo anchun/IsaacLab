@@ -53,7 +53,7 @@ class FrankaCubeLiftEnvCfg_PLAY(FrankaCubeLiftEnvCfg):
         self.observations.policy.enable_corruption = False
         self.commands.object_pose.debug_vis = False
         # room
-        self.scene.plane.spawn.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Data_02_ShowRoom/L_ShowRoom_01.usd"
+        self.scene.plane.spawn.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Data_02_ShowRoom/L_ShowRoom_02.usd"
         self.scene.plane.init_state.pos = [0, 0, -0.7]
         self.scene.plane.init_state.rot = [0.707, 0, 0, -0.707]
         # change table to a rigid box
