@@ -10,6 +10,8 @@
 import argparse
 from collections.abc import Callable
 
+import carb
+import omni
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
@@ -57,9 +59,16 @@ import torch
 
 import omni.log
 
-from isaaclab.devices import Se3Gamepad, Se3GamepadCfg, Se3Keyboard, Se3KeyboardCfg, Se3SpaceMouse, Se3SpaceMouseCfg
-from isaaclab.devices.openxr import remove_camera_configs
-from isaaclab.devices.teleop_device_factory import create_teleop_device
+if "handtracking" in args_cli.teleop_device.lower():
+    from isaacsim.xr.openxr import OpenXRSpec
+    from isaaclab.devices.openxr import XrCfg
+
+from isaaclab.devices import OpenXRDevice, Se3Gamepad, Se3Keyboard, Se3SpaceMouse
+
+if args_cli.enable_pinocchio:
+    from isaaclab.devices.openxr.retargeters.humanoid.fourier.gr1t2_retargeter import GR1T2Retargeter
+    import isaaclab_tasks.manager_based.manipulation.pick_place  # noqa: F401
+from isaaclab.devices.openxr.retargeters.manipulator import GripperRetargeter, Se3AbsRetargeter, Se3RelRetargeter
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 
 import isaaclab_tasks  # noqa: F401
@@ -80,6 +89,44 @@ def main() -> None:
     Returns:
         None
     """
+    # compute actions based on environment
+    if "Reach" in args_cli.task:
+        delta_pose, gripper_command = teleop_data
+        # convert to torch
+        delta_pose = torch.tensor(delta_pose, dtype=torch.float, device=device).repeat(num_envs, 1)
+        # note: reach is the only one that uses a different action space
+        # compute actions
+        return delta_pose
+    elif "PickPlace-GR1T2" in args_cli.task:
+        (left_wrist_pose, right_wrist_pose, hand_joints) = teleop_data[0]
+        # Reconstruct actions_arms tensor with converted positions and rotations
+        actions = torch.tensor(
+            np.concatenate([
+                left_wrist_pose,  # left ee pose
+                right_wrist_pose,  # right ee pose
+                hand_joints,  # hand joint angles
+            ]),
+            device=device,
+            dtype=torch.float32,
+        ).unsqueeze(0)
+        # Concatenate arm poses and hand joint angles
+        return actions
+    else:
+        # resolve gripper command
+        delta_pose, gripper_command = teleop_data
+        if "handtracking" in args_cli.teleop_device.lower():
+            #delta_pose[0] = -delta_pose[0]  # invert the x-axis for the gripper
+            delta_pose[5] = -delta_pose[5]  # invert the xy-rotation for the gripper
+        # convert to torch
+        delta_pose = torch.tensor(delta_pose, dtype=torch.float, device=device).repeat(num_envs, 1)
+        gripper_vel = torch.zeros((delta_pose.shape[0], 1), dtype=torch.float, device=device)
+        gripper_vel[:] = -1 if gripper_command else 1
+        # compute actions
+        return torch.concat([delta_pose, gripper_vel], dim=1)
+
+
+def main():
+    """Running keyboard teleoperation with Isaac Lab manipulation environment."""
     # parse configuration
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
     env_cfg.env_name = args_cli.task
@@ -90,26 +137,17 @@ def main() -> None:
         env_cfg.commands.object_pose.resampling_time_range = (1.0e9, 1.0e9)
         # add termination condition for reaching the goal otherwise the environment won't reset
         env_cfg.terminations.object_reached_goal = DoneTerm(func=mdp.object_reached_goal)
-
-    if args_cli.xr:
-        # External cameras are not supported with XR teleop
-        # Check for any camera configs and disable them
-        env_cfg = remove_camera_configs(env_cfg)
-        env_cfg.sim.render.antialiasing_mode = "DLSS"
-
-    try:
-        # create environment
-        env = gym.make(args_cli.task, cfg=env_cfg).unwrapped
-        # check environment name (for reach , we don't allow the gripper)
-        if "Reach" in args_cli.task:
-            omni.log.warn(
-                f"The environment '{args_cli.task}' does not support gripper control. The device command will be"
-                " ignored."
-            )
-    except Exception as e:
-        omni.log.error(f"Failed to create environment: {e}")
-        simulation_app.close()
-        return
+    # create environment with reflection settings
+    env_cfg.sim.render.rendering_mode = "quality"
+    #env_cfg.sim.render.enable_dlssg = False
+    #env_cfg.sim.render.enable_dl_denoiser = False
+    env_cfg.sim.render.carb_settings = {"/rtx/raytracing/invisLightReflectionsRoughnessThreshold": 0.5}
+    env = gym.make(args_cli.task, cfg=env_cfg).unwrapped
+    # check environment name (for reach , we don't allow the gripper)
+    if "Reach" in args_cli.task:
+        omni.log.warn(
+            f"The environment '{args_cli.task}' does not support gripper control. The device command will be ignored."
+        )
 
     # Flags for controlling teleoperation flow
     should_reset_recording_instance = False
@@ -127,7 +165,10 @@ def main() -> None:
         """
         nonlocal should_reset_recording_instance
         should_reset_recording_instance = True
-        omni.log.info("Reset triggered - Environment will reset on next step")
+        print("Recording instance reset.")
+        start_teleoperation()
+
+    def start_teleoperation():
 
     def start_teleoperation() -> None:
         """
@@ -140,7 +181,9 @@ def main() -> None:
         """
         nonlocal teleoperation_active
         teleoperation_active = True
-        omni.log.info("Teleoperation activated")
+        print("Teleoperation started.")
+
+    def stop_teleoperation():
 
     def stop_teleoperation() -> None:
         """
@@ -153,20 +196,96 @@ def main() -> None:
         """
         nonlocal teleoperation_active
         teleoperation_active = False
-        omni.log.info("Teleoperation deactivated")
+        print("Teleoperation stopped.")
+    
+    def on_keyboard_event(event, *args):
+        if event.type == carb.input.KeyboardEventType.KEY_PRESS:
+            if event.input.name == "R":
+                reset_recording_instance()
+            elif event.input.name == "G":
+                nonlocal teleoperation_active
+                if teleoperation_active:
+                    stop_teleoperation()
+                else:
+                    start_teleoperation()
+        return True
+    
+    # create controller
+    if args_cli.teleop_device.lower() == "keyboard":
+        teleop_interface = Se3Keyboard(
+            pos_sensitivity=0.1 * args_cli.sensitivity, rot_sensitivity=0.1 * args_cli.sensitivity
+        )
+    elif args_cli.teleop_device.lower() == "spacemouse":
+        teleop_interface = Se3SpaceMouse(
+            pos_sensitivity=0.1 * args_cli.sensitivity, rot_sensitivity=0.1 * args_cli.sensitivity
+        )
+    elif args_cli.teleop_device.lower() == "gamepad":
+        teleop_interface = Se3Gamepad(
+            pos_sensitivity=0.1 * args_cli.sensitivity, rot_sensitivity=0.1 * args_cli.sensitivity
+        )
+    elif "dualhandtracking_abs" in args_cli.teleop_device.lower() and "GR1T2" in args_cli.task:
+        # Create GR1T2 retargeter with desired configuration
+        gr1t2_retargeter = GR1T2Retargeter(
+            enable_visualization=True,
+            num_open_xr_hand_joints=2 * (int(OpenXRSpec.HandJointEXT.XR_HAND_JOINT_LITTLE_TIP_EXT) + 1),
+            device=env.unwrapped.device,
+            hand_joint_names=env.scene["robot"].data.joint_names[-22:],
+        )
 
-    # Create device config if not already in env_cfg
-    teleoperation_callbacks: dict[str, Callable[[], None]] = {
-        "R": reset_recording_instance,
-        "START": start_teleoperation,
-        "STOP": stop_teleoperation,
-        "RESET": reset_recording_instance,
-    }
+        # Create hand tracking device with retargeter
+        teleop_interface = OpenXRDevice(
+            env_cfg.xr,
+            retargeters=[gr1t2_retargeter],
+        )
+        teleop_interface.add_callback("RESET", reset_recording_instance)
+        teleop_interface.add_callback("START", start_teleoperation)
+        teleop_interface.add_callback("STOP", stop_teleoperation)
 
-    # For hand tracking devices, add additional callbacks
-    if args_cli.xr:
-        # Default to inactive for hand tracking
+        # Hand tracking needs explicit start gesture to activate
         teleoperation_active = False
+
+    elif "handtracking" in args_cli.teleop_device.lower():
+        # Create EE retargeter with desired configuration
+        if "_abs" in args_cli.teleop_device.lower():
+            retargeter_device = Se3AbsRetargeter(
+                bound_hand=OpenXRDevice.TrackingTarget.HAND_RIGHT, zero_out_xy_rotation=True
+            )
+        else:
+            retargeter_device = Se3RelRetargeter(
+                bound_hand=OpenXRDevice.TrackingTarget.HAND_RIGHT, 
+                zero_out_xy_rotation=True,
+                use_wrist_position = True,
+                use_wrist_rotation = True,
+                delta_pos_scale_factor = 20,
+                delta_rot_scale_factor = 20,
+            )
+
+        grip_retargeter = GripperRetargeter(bound_hand=OpenXRDevice.TrackingTarget.HAND_RIGHT)
+        control_grip_retargeter = GripperRetargeter(bound_hand=OpenXRDevice.TrackingTarget.HAND_LEFT)
+
+        env_cfg.xr = XrCfg(
+            anchor_pos=(-1.5, -1.0, -0.7),
+            anchor_rot=(0.0, 0.0, 0.0, 1.0),
+        )
+        # Create hand tracking device with retargeter (in a list)
+        teleop_interface = OpenXRDevice(
+            env_cfg.xr,
+            retargeters=[retargeter_device, grip_retargeter, control_grip_retargeter],
+        )
+        
+        teleop_interface.add_callback("RESET", reset_recording_instance)
+        teleop_interface.add_callback("START", start_teleoperation)
+        teleop_interface.add_callback("STOP", stop_teleoperation)
+
+        # use keyboard to control start/stop teleoperation
+        control_keyboard = omni.appwindow.get_default_app_window().get_keyboard()
+        control_input = carb.input.acquire_input_interface()
+        control_keyboard_sub = control_input.subscribe_to_keyboard_events(control_keyboard, on_keyboard_event)
+
+        # Hand tracking needs explicit start to activate
+        teleoperation_active = False
+        
+        
     else:
         # Always active for other devices
         teleoperation_active = True
@@ -229,20 +348,19 @@ def main() -> None:
 
     # simulate environment
     while simulation_app.is_running():
-        try:
-            # run everything in inference mode
-            with torch.inference_mode():
-                # get device command
-                action = teleop_interface.advance()
-
-                # Only apply teleop commands when active
-                if teleoperation_active:
-                    # process actions
-                    actions = action.repeat(env.num_envs, 1)
-                    # apply actions
-                    env.step(actions)
-                else:
-                    env.sim.render()
+        # run everything in inference mode
+        with torch.inference_mode():
+            # get device command
+            teleop_data = teleop_interface.advance()
+            # compute actions based on environment
+            actions = pre_process_actions((teleop_data[0], teleop_data[1]), env.num_envs, env.device)
+            if "handtracking" in args_cli.teleop_device.lower():
+                left_hand_reset_cmd = teleop_data[2]
+                if left_hand_reset_cmd:
+                    reset_recording_instance()
+                        
+            # Only apply teleop commands when active
+            if teleoperation_active:
 
                 if should_reset_recording_instance:
                     env.reset()

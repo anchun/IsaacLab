@@ -14,14 +14,15 @@ the event introduced by the function.
 
 from __future__ import annotations
 
-import math
 import torch
+import random
 from typing import TYPE_CHECKING, Literal
 
 import carb
 import omni.physics.tensors.impl.api as physx
 from isaacsim.core.utils.extensions import enable_extension
 from isaacsim.core.utils.stage import get_current_stage
+import omni.usd
 from pxr import Gf, Sdf, UsdGeom, Vt
 
 import isaaclab.sim as sim_utils
@@ -905,6 +906,125 @@ def reset_root_state_uniform(
     asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1), env_ids=env_ids)
     asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
 
+def is_point_in_polygon(point: torch.Tensor, polygon: torch.Tensor) -> bool:
+    """使用射线法检查点是否在多边形内。"""
+    x, y = point[0].item(), point[1].item()
+    n = polygon.size(0)
+    inside = False
+
+    p1x, p1y = polygon[0][0].item(), polygon[0][1].item()
+    for i in range(n + 1):
+        p2x, p2y = polygon[i % n][0].item(), polygon[i % n][1].item()
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+
+    return inside
+
+def check_valid_position(positions: torch.Tensor, polygon: torch.Tensor) -> bool:
+    """检查生成的位置是否有效，确保在多边形区域内。"""
+    if is_point_in_polygon(positions[:2], polygon):  # 只检查 x 和 y 坐标
+        return True  # 如果点在多边形内，则有效
+    return False  # 所有点都在有效区域
+
+good_position = []
+
+def reset_root_state_uniform_with_limit(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    pose_range, #: dict[str, tuple[float, float]],
+    velocity_range: dict[str, tuple[float, float]],
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset the asset root state to a random position and velocity uniformly within the given ranges."""
+    asset: RigidObject | Articulation = env.scene[asset_cfg.name]
+    root_states = asset.data.default_root_state[env_ids].clone()
+
+    # poses
+    num_poses = len(pose_range)
+    all_range_list = [[pose_range[i].get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]] for i in range(len(pose_range))]
+    all_ranges = []
+    for range_list in all_range_list:
+    # range_list = [pose_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
+        ranges = torch.tensor(range_list, device=asset.device)
+        all_ranges.append(ranges)
+
+    # polygon = torch.tensor([[-29, 21], [-25, 21], [-25, 5], [-31, 5], [-31, 11], [-39.5, 11], [-39.5, 5], [-41.5, 5], [-41.5, 7.5], [-47, 7.5], [-47, 10], [-41.5, 10], [-41.5, 18], [-39.5, 18], [-39.5, 13.5], [-31, 13.5], [-31, 15], [-29, 15]], dtype=torch.float32)
+    # polygon = torch.tensor([[-29, 21], [-25, 21], [-25, 5], [-31, 5], [-31, 15], [-29, 15]], dtype=torch.float32)
+    # polygon = torch.tensor([[-2.2, -1.0], [-2.2, 2.6], [2.5, 2.6], [2.5, -1.0]], dtype=torch.float32)
+    polygon = torch.tensor([[10, -1.0], [-2.2, -1.0], [-2.2, 12.0], [10, 12.0]], dtype=torch.float32)
+
+    # 生成随机位置并检查有效性
+    num_dogs = root_states.shape[0]
+    valid_position = [False for i in range(num_dogs)]
+    patch_size = num_dogs // num_poses
+    last_patch = num_dogs - patch_size * (num_poses - 1)
+    rand_samples = []
+    for i in range(num_poses - 1):
+        # start = patch_size*(i)
+        # end_index = patch_size*(i+1)
+        # print("patch_size:", patch_size)
+        # print("all_ranges:", all_ranges)
+        # print("i:", i)
+        # print("start:", start)
+        # print("end_index:", end_index)
+        # print("upper:", all_ranges[i][start:end_index, 1])
+        # print("lower:", all_ranges[i][start:end_index, 0])
+        rand_samples.append((math_utils.sample_uniform(all_ranges[i][:, 0], all_ranges[i][:, 1], (patch_size, 6), device=asset.device)))
+        print("===patch====", patch_size, i, all_ranges[i])
+    rand_samples.append(math_utils.sample_uniform(all_ranges[num_poses - 1][:, 0], all_ranges[num_poses - 1][:, 1], (last_patch, 6), device=asset.device))
+    print("===patch====", patch_size, num_poses-1, all_ranges[num_poses - 1])
+    rand_samples = torch.cat(rand_samples, dim=0)
+    
+    positions = rand_samples[:, 0:3] #+ root_states[:, 0:3] + env.scene.env_origins[env_ids]
+    print("=======Rand_samples======", rand_samples[0], positions, positions + rand_samples[:, 0:3])
+    for i in range(positions.shape[0]):
+        positions[i][2] = 0.5
+
+    global good_position
+
+    # 检查位置是否有效
+    need_check = False
+    if need_check:
+        for i in range(num_dogs):
+            valid_position_i = check_valid_position(positions[i], polygon)  # 需要实现这个函数
+            if valid_position_i:
+                valid_position[i] = True
+                good_position.append(positions[i])
+            
+        for i in range(num_dogs):
+            if not valid_position[i]:
+                valid_position_i = False
+                while not valid_position_i:
+                    # rand_samples_i = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
+                    # positions_i = (root_states[:, 0:3] + env.scene.env_origins[env_ids] + rand_samples_i[:, 0:3])[0]
+                    positions_i = random.choice(good_position)
+                    if check_valid_position(positions_i, polygon):
+                        valid_position_i = True
+                        positions[i] = positions_i
+
+    # 计算姿态
+    orientations_delta = math_utils.quat_from_euler_xyz(rand_samples[:, 3], rand_samples[:, 4], rand_samples[:, 5])
+    orientations = math_utils.quat_mul(root_states[:, 3:7], orientations_delta)
+
+    # velocities
+    range_list = [velocity_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
+    ranges = torch.tensor(range_list, device=asset.device)
+    rand_samples = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
+
+    velocities = root_states[:, 7:13] + rand_samples
+
+    # set into the physics simulation
+    asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1), env_ids=env_ids)
+    asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
+
+
+
 
 def reset_root_state_with_random_orientation(
     env: ManagerBasedEnv,
@@ -1156,6 +1276,8 @@ def reset_scene_to_default(env: ManagerBasedEnv, env_ids: torch.Tensor):
         default_joint_pos = articulation_asset.data.default_joint_pos[env_ids].clone()
         default_joint_vel = articulation_asset.data.default_joint_vel[env_ids].clone()
         # set into the physics simulation
+        articulation_asset.set_joint_position_target(default_joint_pos, env_ids=env_ids)
+        articulation_asset.set_joint_velocity_target(default_joint_vel, env_ids=env_ids)
         articulation_asset.write_joint_state_to_sim(default_joint_pos, default_joint_vel, env_ids=env_ids)
     # deformable objects
     for deformable_object in env.scene.deformable_objects.values():
@@ -1229,8 +1351,25 @@ class randomize_visual_texture_material(ManagerTermBase):
             body_names_regex = ".*"
 
         # create the affected prim path
-        # TODO: Remove the hard-coded "/visuals" part.
-        prim_path = f"{asset.cfg.prim_path}/{body_names_regex}/visuals"
+        # Check if the pattern with '/visuals' yields results when matching `body_names_regex`.
+        # If not, fall back to a broader pattern without '/visuals'.
+        asset_main_prim_path = asset.cfg.prim_path
+        # Try the pattern with '/visuals' first for the generic case
+        pattern_with_visuals = f"{asset_main_prim_path}/{body_names_regex}/visuals"
+        # Use sim_utils to check if any prims currently match this pattern
+        matching_prims = sim_utils.find_matching_prim_paths(pattern_with_visuals)
+        if matching_prims:
+            # If matches are found, use the pattern with /visuals
+            prim_path = pattern_with_visuals
+        else:
+            # If no matches found, fall back to the broader pattern without /visuals
+            # This pattern (e.g., /World/envs/env_.*/Table/.*) should match visual prims
+            # whether they end in /visuals or have other structures.
+            prim_path = f"{asset_main_prim_path}/.*"
+            carb.log_info(
+                f"Pattern '{pattern_with_visuals}' found no prims. Falling back to '{prim_path}' for texture"
+                " randomization."
+            )
 
         # Create the omni-graph node for the randomization term
         def rep_texture_randomization():
@@ -1240,7 +1379,6 @@ class randomize_visual_texture_material(ManagerTermBase):
                 rep.randomizer.texture(
                     textures=texture_paths, project_uvw=True, texture_rotate=rep.distribution.uniform(*texture_rotation)
                 )
-
             return prims_group.node
 
         # Register the event to the replicator

@@ -6,7 +6,11 @@
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
-
+from isaaclab.sensors import CameraCfg
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+import isaaclab.sim as sim_utils
+import math
+import numpy as np
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg, RewardsCfg
 
@@ -95,9 +99,7 @@ class H1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
                 "yaw": (0.0, 0.0),
             },
         }
-
-        # Terminations
-        self.terminations.base_contact.params["sensor_cfg"].body_names = [".*torso_link"]
+        self.events.base_com = None
 
         # Rewards
         self.rewards.undesired_contacts = None
@@ -111,32 +113,54 @@ class H1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
 
-        # terminations
+        # Terminations
         self.terminations.base_contact.params["sensor_cfg"].body_names = ".*torso_link"
 
+@configclass
+class H1VelocityWithNavigationCommandsCfg:
+    """Command specifications for the MDP."""
+
+    base_velocity = mdp.UniformVelocityNavigationCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(8.0, 8.0),
+        heading_command=True,
+        heading_control_stiffness=1.0,
+        debug_vis=False,
+        ranges=mdp.UniformVelocityCommandCfg.Ranges( lin_vel_x=(1.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-2.0, 2.0), heading=(0, 0)),
+        waypoints=np.array([[-3.5, 0.0], [0, 3.5], [3.5, 0], [0, -3.5]]),
+    )
 
 @configclass
 class H1RoughEnvCfg_PLAY(H1RoughEnvCfg):
+    commands: H1VelocityWithNavigationCommandsCfg = H1VelocityWithNavigationCommandsCfg()
+
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
 
-        # make a smaller scene for play
-        self.scene.num_envs = 50
-        self.scene.env_spacing = 2.5
-        self.episode_length_s = 40.0
-        # spawn the robot randomly in the grid (instead of their terrain levels)
-        self.scene.terrain.max_init_terrain_level = None
-        # reduce the number of terrains to save memory
-        if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 5
-            self.scene.terrain.terrain_generator.num_cols = 5
-            self.scene.terrain.terrain_generator.curriculum = False
+        self.episode_length_s = 60.0
+        self.scene.terrain.terrain_type = "usd"
+        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Simple_Room/simple_room.usd"
+        self.scene.sky_light = None
 
-        self.commands.base_velocity.ranges.lin_vel_x = (1.0, 1.0)
+        self.curriculum.terrain_levels = None
+
+        self.events.reset_base.params = {
+            "pose_range": {"x": (-3.5, -3.5), "y": (0.0, 0.0), "yaw": (0, 0)},
+            "velocity_range": {
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
+            },
+        }
+
+        # Commands
+        self.commands.base_velocity.ranges.lin_vel_x = (0.5, 0.5)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
-        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
-        self.commands.base_velocity.ranges.heading = (0.0, 0.0)
+        self.commands.base_velocity.ranges.ang_vel_z = (-2.0, 2.0)
         # disable randomization for play
         self.observations.policy.enable_corruption = False
         # remove random pushing

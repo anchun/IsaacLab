@@ -108,6 +108,8 @@ class OpenXRDevice(DeviceBase):
         carb.settings.get_settings().set_float("/persistent/xr/profile/ar/render/nearPlane", self._xr_cfg.near_plane)
         carb.settings.get_settings().set_string("/persistent/xr/profile/ar/anchorMode", "custom anchor")
         carb.settings.get_settings().set_string("/xrstage/profile/ar/customAnchor", xr_anchor.prim_path)
+        carb.settings.get_settings().set_string("/persistent/xr/profile/vr/anchorMode", "custom anchor")
+        carb.settings.get_settings().set_string("/xrstage/profile/vr/customAnchor", xr_anchor.prim_path)
 
     def __del__(self):
         """Clean up resources when the object is destroyed.
