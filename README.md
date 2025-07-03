@@ -96,6 +96,8 @@ For detailed Isaac Sim installation instructions, please refer to
 
     ```
     isaaclab.bat -i
+    #assets_folder_with_version example: D:\robots\Assets\Isaac\4.5, need administration priority
+    cmd /c mklink /D .\assets  path/to/assets_folder_with_version
     ```
 
 6. [Optional] Set up a virtual python environment (e.g. for Conda)
