@@ -47,26 +47,37 @@ ensure you are using the `feature/isaacsim_5_0` branch.
 For detailed Isaac Sim installation instructions, please refer to
 [Isaac Sim README](https://github.com/isaac-sim/IsaacSim?tab=readme-ov-file#quick-start).
 
+0. P4 assets
+    download p4 assets from //51World/ART/Isaac/4.5/ to local folder like D:\robots\Assets
+
 1. Clone Isaac Sim
 
     ```
-    git clone https://github.com/isaac-sim/IsaacSim.git
+    git clone http://git.51vr.local/51World/IsaacSim.git
     ```
 
 2. Build Isaac Sim
 
+    linux
     ```
     cd IsaacSim
     ./build.sh
+    ln -s path/to/assets_folder_with_version ./_build/linux-x86_64/release/assets
     ```
 
-    On Windows, please use `build.bat` instead.
+    windows
+    ```
+    cd IsaacSim
+    ./build.bat
+    # assets_folder_with_version example: D:\robots\Assets\Isaac\4.5
+    mklink /D .\_build\windows-x86_64\release\assets  path/to/assets_folder_with_version 
+    ```
 
 3. Clone Isaac Lab
 
     ```
     cd ..
-    git clone -b feature/isaacsim_5_0 https://github.com/isaac-sim/IsaacLab.git
+    git clone http://git.51vr.local/51World/IsaacLab.git
     cd isaaclab
     ```
 
@@ -89,29 +100,40 @@ For detailed Isaac Sim installation instructions, please refer to
     Linux:
 
     ```
+    isaaclab.bat --conda isaaclab
+    conda activate isaaclab
     ./isaaclab.sh -i
+    ln -s  path/to/assets_folder_with_version ./assets
     ```
 
     Windows:
 
     ```
+    isaaclab.bat --conda isaaclab
+    conda activate isaaclab
     isaaclab.bat -i
-    #assets_folder_with_version example: D:\robots\Assets\Isaac\4.5, need administration priority
-    cmd /c mklink /D .\assets  path/to/assets_folder_with_version
+    #assets_folder_with_version example: D:\robots\Assets\Isaac\4.5
+    mklink /D .\assets  path/to/assets_folder_with_version
     ```
 
-6. [Optional] Set up a virtual python environment (e.g. for Conda)
+6. Play
 
     Linux:
 
     ```
-    source ../IsaacSim/_build/linux-x86_64/release/setup_conda_env.sh
+    # environment test
+    ./isaaclab.sh -s
+    # play with unitree go2
+    ./isaaclab.sh -p ./scripts/reinforcement_learning/rsl_rl/play.py --task Isaac-Velocity-Rough-Unitree-Go2-Play-v0 --num_envs 2 --use_pretrained_checkpoint --enable_cameras
     ```
 
     Windows:
 
     ```
-    ..\IsaacSim\_build\windows-x86_64\release\setup_python_env.bat
+    # environment test
+    isaaclab.bat -s
+    # play with unitree go2
+    isaaclab.bat -p .\scripts\reinforcement_learning\rsl_rl\play.py --task Isaac-Velocity-Rough-Unitree-Go2-Play-v0 --num_envs 2 --use_pretrained_checkpoint --enable_cameras
     ```
 
 7. Train!
