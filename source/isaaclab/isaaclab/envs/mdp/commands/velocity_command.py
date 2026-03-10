@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -7,12 +7,13 @@
 
 from __future__ import annotations
 
-import torch
+import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import omni.log
 import math
+import torch
 
 import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
@@ -24,6 +25,9 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
     from .commands_cfg import NormalVelocityCommandCfg, UniformVelocityCommandCfg, UniformVelocityNavigationCommandCfg
+
+# import logger
+logger = logging.getLogger(__name__)
 
 
 class UniformVelocityCommand(CommandTerm):
@@ -67,7 +71,7 @@ class UniformVelocityCommand(CommandTerm):
                 " parameter is set to None."
             )
         if self.cfg.ranges.heading and not self.cfg.heading_command:
-            omni.log.warn(
+            logger.warning(
                 f"The velocity command has the 'ranges.heading' attribute set to '{self.cfg.ranges.heading}'"
                 " but the heading command is not active. Consider setting the flag for the heading command to True."
             )
@@ -440,7 +444,7 @@ class UniformVelocityCommand(CommandTerm):
         # set visibility of markers
         # note: parent only deals with callbacks. not their visibility
         if debug_vis:
-            # create markers if necessary for the first tome
+            # create markers if necessary for the first time
             if not hasattr(self, "goal_vel_visualizer"):
                 # -- goal
                 self.goal_vel_visualizer = VisualizationMarkers(self.cfg.goal_vel_visualizer_cfg)

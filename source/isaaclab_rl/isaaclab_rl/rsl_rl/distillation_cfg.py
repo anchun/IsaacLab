@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -10,53 +10,7 @@ from typing import Literal
 
 from isaaclab.utils import configclass
 
-#########################
-# Policy configurations #
-#########################
-
-
-@configclass
-class RslRlDistillationStudentTeacherCfg:
-    """Configuration for the distillation student-teacher networks."""
-
-    class_name: str = "StudentTeacher"
-    """The policy class name. Default is StudentTeacher."""
-
-    init_noise_std: float = MISSING
-    """The initial noise standard deviation for the student policy."""
-
-    noise_std_type: Literal["scalar", "log"] = "scalar"
-    """The type of noise standard deviation for the policy. Default is scalar."""
-
-    student_hidden_dims: list[int] = MISSING
-    """The hidden dimensions of the student network."""
-
-    teacher_hidden_dims: list[int] = MISSING
-    """The hidden dimensions of the teacher network."""
-
-    activation: str = MISSING
-    """The activation function for the student and teacher networks."""
-
-
-@configclass
-class RslRlDistillationStudentTeacherRecurrentCfg(RslRlDistillationStudentTeacherCfg):
-    """Configuration for the distillation student-teacher recurrent networks."""
-
-    class_name: str = "StudentTeacherRecurrent"
-    """The policy class name. Default is StudentTeacherRecurrent."""
-
-    rnn_type: str = MISSING
-    """The type of the RNN network. Either "lstm" or "gru"."""
-
-    rnn_hidden_dim: int = MISSING
-    """The hidden dimension of the RNN network."""
-
-    rnn_num_layers: int = MISSING
-    """The number of layers of the RNN network."""
-
-    teacher_recurrent: bool = MISSING
-    """Whether the teacher network is recurrent too."""
-
+from .rl_cfg import RslRlBaseRunnerCfg, RslRlMLPModelCfg
 
 ############################
 # Algorithm configurations #
@@ -81,3 +35,98 @@ class RslRlDistillationAlgorithmCfg:
 
     max_grad_norm: None | float = None
     """The maximum norm the gradient is clipped to."""
+
+    optimizer: Literal["adam", "adamw", "sgd", "rmsprop"] = "adam"
+    """The optimizer to use for the student policy."""
+
+    loss_type: Literal["mse", "huber"] = "mse"
+    """The loss type to use for the student policy."""
+
+
+#########################
+# Runner configurations #
+#########################
+
+
+@configclass
+class RslRlDistillationRunnerCfg(RslRlBaseRunnerCfg):
+    """Configuration of the runner for distillation algorithms."""
+
+    class_name: str = "DistillationRunner"
+    """The runner class name. Default is DistillationRunner."""
+
+    student: RslRlMLPModelCfg = MISSING
+    """The student configuration."""
+
+    teacher: RslRlMLPModelCfg = MISSING
+    """The teacher configuration."""
+
+    algorithm: RslRlDistillationAlgorithmCfg = MISSING
+    """The algorithm configuration."""
+
+    policy: RslRlDistillationStudentTeacherCfg = MISSING
+    """The policy configuration.
+
+    For rsl-rl >= 4.0.0, this configuration is deprecated. Please use `student` and `teacher` model configurations
+    instead.
+    """
+
+
+#############################
+# Deprecated configurations #
+#############################
+
+
+@configclass
+class RslRlDistillationStudentTeacherCfg:
+    """Configuration for the distillation student-teacher networks.
+
+    For rsl-rl >= 4.0.0, this configuration is deprecated. Please use `RslRlMLPModelCfg` instead.
+    """
+
+    class_name: str = "StudentTeacher"
+    """The policy class name. Default is StudentTeacher."""
+
+    init_noise_std: float = MISSING
+    """The initial noise standard deviation for the student policy."""
+
+    noise_std_type: Literal["scalar", "log"] = "scalar"
+    """The type of noise standard deviation for the policy. Default is scalar."""
+
+    student_obs_normalization: bool = MISSING
+    """Whether to normalize the observation for the student network."""
+
+    teacher_obs_normalization: bool = MISSING
+    """Whether to normalize the observation for the teacher network."""
+
+    student_hidden_dims: list[int] = MISSING
+    """The hidden dimensions of the student network."""
+
+    teacher_hidden_dims: list[int] = MISSING
+    """The hidden dimensions of the teacher network."""
+
+    activation: str = MISSING
+    """The activation function for the student and teacher networks."""
+
+
+@configclass
+class RslRlDistillationStudentTeacherRecurrentCfg(RslRlDistillationStudentTeacherCfg):
+    """Configuration for the distillation student-teacher recurrent networks.
+
+    For rsl-rl >= 4.0.0, this configuration is deprecated. Please use `RslRlRNNModelCfg` instead.
+    """
+
+    class_name: str = "StudentTeacherRecurrent"
+    """The policy class name. Default is StudentTeacherRecurrent."""
+
+    rnn_type: str = MISSING
+    """The type of the RNN network. Either "lstm" or "gru"."""
+
+    rnn_hidden_dim: int = MISSING
+    """The hidden dimension of the RNN network."""
+
+    rnn_num_layers: int = MISSING
+    """The number of layers of the RNN network."""
+
+    teacher_recurrent: bool = MISSING
+    """Whether the teacher network is recurrent too."""
