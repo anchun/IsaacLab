@@ -38,6 +38,117 @@ Isaac Lab offers a comprehensive set of tools and environments designed to facil
 
 ## Getting Started
 
+### Getting Started with Open-Source Isaac Sim
+
+Isaac Sim is now open source and available on GitHub! To run Isaac Lab with the open source Isaac Sim repo,
+ensure you are using the `feature/isaacsim_5_0` branch.
+
+For detailed Isaac Sim installation instructions, please refer to
+[Isaac Sim README](https://github.com/isaac-sim/IsaacSim?tab=readme-ov-file#quick-start).
+
+0. P4 assets
+    download p4 assets from //51World/ART/Isaac/5.1/ to local folder like D:\robots\Assets
+
+1. Clone Isaac Sim
+
+    ```
+    git clone http://git.51vr.local/51World/IsaacSim.git
+    ```
+
+2. Build Isaac Sim
+
+    linux
+    ```
+    cd IsaacSim
+    ./build.sh
+    ln -s path/to/assets_folder_with_version ./_build/linux-x86_64/release/assets
+    ```
+
+    windows
+    ```
+    cd IsaacSim
+    ./build.bat
+    # assets_folder_with_version example: D:\robots\Assets\Isaac\5.1
+    mklink /D .\_build\windows-x86_64\release\assets  path/to/assets_folder_with_version 
+    ```
+
+3. Clone Isaac Lab
+
+    ```
+    cd ..
+    git clone http://git.51vr.local/51World/IsaacLab.git
+    cd isaaclab
+    ```
+
+4. Set up symlink in Isaac Lab
+
+    Linux:
+
+    ```
+    ln -s ../IsaacSim/_build/linux-x86_64/release _isaac_sim
+    ```
+
+    Windows:
+
+    ```
+    mklink /D _isaac_sim ..\IsaacSim\_build\windows-x86_64\release
+    ```
+
+5. Install Isaac Lab
+
+    Linux:
+
+    ```
+    isaaclab.bat --conda isaaclab
+    conda activate isaaclab
+    ./isaaclab.sh -i
+    ln -s  path/to/assets_folder_with_version ./assets
+    ```
+
+    Windows:
+
+    ```
+    isaaclab.bat --conda isaaclab
+    conda activate isaaclab
+    isaaclab.bat -i
+    #assets_folder_with_version example: D:\robots\Assets\Isaac\5.1
+    mklink /D .\assets  path/to/assets_folder_with_version
+    ```
+
+6. Play
+
+    Linux:
+
+    ```
+    # environment test
+    ./isaaclab.sh -s
+    # play with unitree go2
+    ./isaaclab.sh -p ./scripts/reinforcement_learning/rsl_rl/play.py --task Isaac-Velocity-Rough-Unitree-Go2-Play-v0 --num_envs 2 --use_pretrained_checkpoint --enable_cameras
+    ```
+
+    Windows:
+
+    ```
+    # environment test
+    isaaclab.bat -s
+    # play with unitree go2
+    isaaclab.bat -p .\scripts\reinforcement_learning\rsl_rl\play.py --task Isaac-Velocity-Rough-Unitree-Go2-Play-v0 --num_envs 2 --use_pretrained_checkpoint --enable_cameras
+    ```
+
+7. Train!
+
+    Linux:
+
+    ```
+    ./isaaclab.sh -p scripts/reinforcement_learning/skrl/train.py --task Isaac-Ant-v0 --headless
+    ```
+
+    Windows:
+
+    ```
+    isaaclab.bat -p scripts\reinforcement_learning\skrl\train.py --task Isaac-Ant-v0 --headless
+    ```
+
 ### Documentation
 
 Our [documentation page](https://isaac-sim.github.io/IsaacLab) provides everything you need to get started, including
