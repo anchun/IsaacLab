@@ -116,7 +116,7 @@ class OpenXRDevice(DeviceBase):
             carb.settings.get_settings().set_string("/persistent/xr/profile/ar/anchorMode", "custom anchor")
             carb.settings.get_settings().set_string("/xrstage/profile/ar/customAnchor", self._xr_anchor_headset_path)
             carb.settings.get_settings().set_string("/persistent/xr/profile/vr/anchorMode", "custom anchor")
-        	carb.settings.get_settings().set_string("/xrstage/profile/vr/customAnchor", self._xr_anchor_headset_path)
+            carb.settings.get_settings().set_string("/xrstage/profile/vr/customAnchor", self._xr_anchor_headset_path)
 
         # Button binding support
         self.__button_subscriptions: dict[str, dict] = {}

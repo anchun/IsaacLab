@@ -68,8 +68,10 @@ For detailed Isaac Sim installation instructions, please refer to
     ```
     cd IsaacSim
     ./build.bat
-    # assets_folder_with_version example: D:\robots\Assets\Isaac\5.1
-    mklink /D .\_build\windows-x86_64\release\assets  path/to/assets_folder_with_version 
+    # make asset link
+    mklink /D .\_build\windows-x86_64\release\assets  D:\robots\Assets\Isaac\5.1
+    # [optional] install pytorch
+    python.bat -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129
     ```
 
 3. Clone Isaac Lab
