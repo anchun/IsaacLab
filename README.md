@@ -117,7 +117,7 @@ For detailed Isaac Sim installation instructions, please refer to
     mklink /D .\assets  path/to/assets_folder_with_version
     ```
 
-6. Play
+6. Training and Play
 
     Linux:
 
@@ -125,7 +125,8 @@ For detailed Isaac Sim installation instructions, please refer to
     # environment test
     ./isaaclab.sh -s
     # play with unitree go2
-    ./isaaclab.sh -p ./scripts/reinforcement_learning/rsl_rl/play.py --task Isaac-Velocity-Rough-Unitree-Go2-Play-v0 --num_envs 2 --use_pretrained_checkpoint --enable_cameras
+    ./isaaclab.sh -p ./scripts/reinforcement_learning/rsl_rl/train.py --task Isaac-Velocity-Rough-Unitree-Go2-v0 --num_envs 2  --enable_cameras
+    ./isaaclab.sh -p ./scripts/reinforcement_learning/rsl_rl/play.py --task Isaac-Velocity-Rough-Unitree-Go2-v0 --num_envs 2  --enable_cameras
     ```
 
     Windows:
@@ -133,23 +134,12 @@ For detailed Isaac Sim installation instructions, please refer to
     ```
     # environment test
     isaaclab.bat -s
+    # training
+    isaaclab.bat -p .\scripts\reinforcement_learning\rsl_rl\train.py --task Isaac-Velocity-Rough-Unitree-Go2-v0 --headless
     # play with unitree go2
-    isaaclab.bat -p .\scripts\reinforcement_learning\rsl_rl\play.py --task Isaac-Velocity-Rough-Unitree-Go2-Play-v0 --num_envs 2 --use_pretrained_checkpoint --enable_cameras
+    isaaclab.bat -p .\scripts\reinforcement_learning\rsl_rl\play.py --task Isaac-Velocity-Rough-Unitree-Go2-v0 --num_envs 2  --enable_cameras
     ```
 
-7. Train!
-
-    Linux:
-
-    ```
-    ./isaaclab.sh -p scripts/reinforcement_learning/skrl/train.py --task Isaac-Ant-v0 --headless
-    ```
-
-    Windows:
-
-    ```
-    isaaclab.bat -p scripts\reinforcement_learning\skrl\train.py --task Isaac-Ant-v0 --headless
-    ```
 
 ### Documentation
 
