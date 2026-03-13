@@ -27,8 +27,39 @@ import omni.client
 # import logger
 logger = logging.getLogger(__name__)
 
-NUCLEUS_ASSET_ROOT_DIR = carb.settings.get_settings().get("/persistent/isaac/asset_root/cloud")
-"""Path to the root directory on the Nucleus Server."""
+
+def _get_asset_root_dir() -> str:
+    """Get the asset root directory, prioritizing local assets over cloud.
+
+    Priority order:
+    1. ISAAC_ASSET_ROOT environment variable (if set)
+    2. Local assets directory relative to isaac_sim installation
+    3. Cloud settings from carb
+    """
+    # Check environment variable first
+    env_asset_root = os.environ.get("ISAAC_ASSET_ROOT")
+    if env_asset_root and os.path.isdir(env_asset_root):
+        return env_asset_root
+
+    # Check for local assets directory relative to isaac_sim
+    # Try to find _isaac_sim/assets by looking at the carb dll path
+    try:
+        import carb.tokens
+        exe_path = carb.tokens.get_tokens_interface().resolve("${exe-path}")
+        if exe_path:
+            # exe_path is typically _isaac_sim/kit
+            local_assets = os.path.normpath(os.path.join(exe_path, "..", "assets"))
+            if os.path.isdir(local_assets):
+                return local_assets
+    except Exception:
+        pass
+
+    # Fall back to cloud settings
+    return carb.settings.get_settings().get("/persistent/isaac/asset_root/cloud")
+
+
+NUCLEUS_ASSET_ROOT_DIR = _get_asset_root_dir()
+"""Path to the root directory on the Nucleus Server or local assets."""
 
 NVIDIA_NUCLEUS_DIR = f"{NUCLEUS_ASSET_ROOT_DIR}/NVIDIA"
 """Path to the root directory on the NVIDIA Nucleus Server."""
