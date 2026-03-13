@@ -32,7 +32,7 @@ for file in npy_files:
     file_path = os.path.join(current_directory, file)
     trajectory_data = np.load(file_path)
     # all_trajectory_points.append([base_point] + list(trajectory_data))
-    all_trajectory_points.append(list(trajectory_data))
+    all_trajectory_points.append(trajectory_data.tolist())
 
 # all_trajectory_points = [[
 #     [-1.2, -0.5],
@@ -159,11 +159,8 @@ class UnitreeGo2RoughEnvCfg_PLAY(UnitreeGo2RoughEnvCfg):
 
         self.episode_length_s = 60.0
         self.scene.terrain.terrain_type = "usd"
-        # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Simple_Room/simple_room_dog.usd"
-        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Data_02_ShowRoom/L_ShowRoom_02.usd"#demo_showroom.usd"
+        self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Data_02_ShowRoom/L_ShowRoom_02.usd"
         # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/AITower/L_ShowRoom_01.usd"
-        # self.scene.terrain.usd_path = f"{ISAAC_NUCLEUS_DIR}/Environments/Office/office.usd"
-        # self.scene.terrain.usd_path = r"D:\fsy\scene\Data_01_RobotArm\L_Workshop_01_latest.usd"
         self.scene.sky_light = None
 
         self.curriculum.terrain_levels = None
